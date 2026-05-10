@@ -1,0 +1,32 @@
+# Unreal Engine generated directories
+Binaries/
+Build/
+DerivedDataCache/
+Intermediate/
+Saved/
+
+# Visual Studio
+.vs/
+*.sln
+*.suo
+*.user
+*.vsconfig
+
+# OS
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Compiled objects
+*.o
+*.obj
+*.exe
+*.pdb
+
+# Plugins (uncomment if using plugins not in source)
+# Plugins/*/Binaries/
+# Plugins/*/Intermediate/
+
+# Content that can be regenerated
+Content/Collections/
+Content/Developers/
