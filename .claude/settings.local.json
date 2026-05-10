@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell($dirs = Get-ChildItem -Path \"C:\\\\Users\\\\user\\\\Documents\\\\Unreal Projects\\\\BreakingWave\" -Force | Where-Object {$_.PSIsContainer}; $dirs | Select-Object Name)"
+    ]
+  }
+}

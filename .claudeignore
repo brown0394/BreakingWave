@@ -1,0 +1,24 @@
+# Build artifacts — regenerable, no value for Claude
+Intermediate/
+Binaries/
+DerivedDataCache/
+
+# Visual Studio IDE state — regenerable
+.vs/
+
+# Runtime-generated data
+Saved/
+
+# Binary Unreal assets — Claude cannot read these formats
+Content/**/*.uasset
+Content/**/*.umap
+Content/**/*.fbx
+Content/__ExternalActors__/
+Content/__ExternalObjects__/
+
+# IDE/tooling files
+BreakingWave.sln
+.vsconfig
+
+# Git internals
+.git/
