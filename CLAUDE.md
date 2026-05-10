@@ -1,15 +1,5 @@
 # BreakingWave — CLAUDE.md
 
-## Project Summary
-
-**THE SHORE** — A first-person narrative war game built with Unreal Engine 5 + C++.
-One beach, one day of war. The player is not a hero; they are each person who was there, on both sides.
-Death is not failure — it opens the next pair of eyes. The chain of gazes is the core loop.
-
-Two-person team: writer/developer + Ash (Claude). Scope is intentionally small. Finish over feature.
-
----
-
 ## Document Index
 
 | File | Contents |
@@ -24,8 +14,6 @@ Two-person team: writer/developer + Ash (Claude). Scope is intentionally small. 
 | `08_ENEMY_AI.md` | MG bunker AI (priority targeting, accuracy, stops), infantry AI, difficulty curve |
 | `09_ALLY_NPC.md` | Allied NPC personality types, density/corpse management, ammo looting |
 | `10_CHECKLIST.md` | 8-phase development order with per-step goals and document assignments |
-
----
 
 ## When to Read Each Document
 
@@ -56,8 +44,6 @@ Two-person team: writer/developer + Ash (Claude). Scope is intentionally small. 
 | Design discussion (not just coding) | `01_SOUL.md`, `03_DECISIONS.md` + relevant docs |
 | Checking what to build next | `10_CHECKLIST.md`, `02_STATUS.md` |
 
----
-
 ## Key Constraints to Remember
 
 - **No UI**: No health bar, crosshair, ammo counter, or minimap. Sensation only.
@@ -68,12 +54,3 @@ Two-person team: writer/developer + Ash (Claude). Scope is intentionally small. 
 - **Two-shot damage**: Headshot kills instantly. Torso takes two hits. Wounded state does not recover.
 - **Fog is load-bearing**: Removes time sense + limits visibility + enables NPC spawn/despawn outside view.
 - **Code readability is priority 3**: Function and variable names reveal intent. Comments explain why, not what.
-
----
-
-## Current Phase
-
-**Step 1 — Grey Box Beach** (In Progress)
-
-Terrain heightmap exists. Next: place grey-box geometry (craters, hedgehogs, berms, bunkers, landing craft, fog).
-See `10_CHECKLIST.md` Step 1 and `02_STATUS.md` for exact status.
