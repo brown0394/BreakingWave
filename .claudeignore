@@ -22,3 +22,6 @@ BreakingWave.sln
 
 # Git internals
 .git/
+
+# Human-facing collaboration guide — for the developer to read, not Claude
+00_CLAUDE_GUIDE.md

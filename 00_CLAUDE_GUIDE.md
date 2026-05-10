@@ -65,3 +65,32 @@ This habit determines the quality of the next session.
 - **Can be confidently wrong** → Ask "really?" — re-examination catches mistakes
 - **Assumes and proceeds when instructions are vague** → Verify the assumptions
 - **May propose overly complex designs** → Ask "can the two of us actually build this?"
+
+---
+
+## Using Claude Code CLI (Additional Tips)
+
+### CLAUDE.md Is Auto-Loaded
+This project now has a `CLAUDE.md`. When using Claude Code CLI, it is loaded automatically at the start of every session.
+This means Claude already knows the document map and key constraints before you say anything.
+You still need to paste `01_SOUL.md` and `02_STATUS.md` when working in the web UI or API — but in Claude Code CLI, CLAUDE.md covers orientation.
+
+### Running Commands Inline
+In Claude Code, type `! <command>` to run a terminal command and have its output land directly in the conversation.
+Useful for pasting compile errors, build output, or UE log lines without leaving the chat.
+
+### Re-State Constraints in Long Sessions, Don't Reference Them
+When a conversation gets long, Claude loses early context.
+Don't say "remember we decided X" — Claude may not actually remember.
+Instead, paste the relevant constraint or decision text again directly.
+One sentence from `03_DECISIONS.md` is more reliable than asking Claude to recall.
+
+### Ask Claude to Write the Session-End Doc Updates
+At the end of a session you can say:
+"Update 02_STATUS.md and add any new decisions to 03_DECISIONS.md."
+Claude will write the full text. You review and save. Faster than writing it yourself.
+
+### Push Back When Claude Over-Builds
+Claude will sometimes write more than asked — extra error handling, abstractions, refactors.
+If you didn't ask for it, push back: "just the specific thing, nothing else."
+This is a two-person project. Every line of code not needed is maintenance weight.
