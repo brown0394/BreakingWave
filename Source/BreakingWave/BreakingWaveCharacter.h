@@ -41,6 +41,10 @@ protected:
 	UPROPERTY(EditAnywhere, Category ="Input")
 	UInputAction* MoveAction;
 
+	/** Sprint Input Action */
+	UPROPERTY(EditAnywhere, Category ="Input")
+	UInputAction* SprintAction;
+
 	/** Look Input Action */
 	UPROPERTY(EditAnywhere, Category ="Input")
 	class UInputAction* LookAction;
@@ -75,6 +79,22 @@ protected:
 	/** Handles jump end inputs from either controls or UI interfaces */
 	UFUNCTION(BlueprintCallable, Category="Input")
 	virtual void DoJumpEnd();
+
+	/** Handles sprint start inputs from either controls or UI interfaces */
+	UFUNCTION(BlueprintCallable, Category="Input")
+	virtual void DoSprintStart();
+
+	/** Handles sprint end inputs from either controls or UI interfaces */
+	UFUNCTION(BlueprintCallable, Category="Input")
+	virtual void DoSprintEnd();
+
+	/** Movement speed while walking (default) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Movement")
+	float WalkSpeed = 600.f;
+
+	/** Movement speed while sprinting */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Movement")
+	float RunSpeed = 900.f;
 
 protected:
 

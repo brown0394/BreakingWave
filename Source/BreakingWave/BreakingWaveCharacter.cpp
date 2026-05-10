@@ -42,6 +42,7 @@ ABreakingWaveCharacter::ABreakingWaveCharacter()
 	// Configure character movement
 	GetCharacterMovement()->BrakingDecelerationFalling = 1500.0f;
 	GetCharacterMovement()->AirControl = 0.5f;
+	GetCharacterMovement()->MaxWalkSpeed = WalkSpeed;
 }
 
 void ABreakingWaveCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
@@ -55,6 +56,10 @@ void ABreakingWaveCharacter::SetupPlayerInputComponent(UInputComponent* PlayerIn
 
 		// Moving
 		EnhancedInputComponent->BindAction(MoveAction, ETriggerEvent::Triggered, this, &ABreakingWaveCharacter::MoveInput);
+
+		// Sprinting
+		EnhancedInputComponent->BindAction(SprintAction, ETriggerEvent::Started, this, &ABreakingWaveCharacter::DoSprintStart);
+		EnhancedInputComponent->BindAction(SprintAction, ETriggerEvent::Completed, this, &ABreakingWaveCharacter::DoSprintEnd);
 
 		// Looking/Aiming
 		EnhancedInputComponent->BindAction(LookAction, ETriggerEvent::Triggered, this, &ABreakingWaveCharacter::LookInput);
@@ -117,4 +122,14 @@ void ABreakingWaveCharacter::DoJumpEnd()
 {
 	// pass StopJumping to the character
 	StopJumping();
+}
+
+void ABreakingWaveCharacter::DoSprintStart()
+{
+	GetCharacterMovement()->MaxWalkSpeed = RunSpeed;
+}
+
+void ABreakingWaveCharacter::DoSprintEnd()
+{
+	GetCharacterMovement()->MaxWalkSpeed = WalkSpeed;
 }
