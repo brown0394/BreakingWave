@@ -26,8 +26,11 @@ Code exists. Terrain exists (heightmap-generated grey landscape). Grey-box detai
 - [x] BreakingWaveCameraManager — pitch-limited camera manager stub
 - [x] BreakingWaveGameMode / PlayerController — base classes
 
+### Tools
+- [x] Tools/GenerateBeachHeightmap.ps1 — generates the zone-profiled heightmap (SourceAssets/BeachHeightmap_1009.png); re-run after editing its Profile table
+
 ### Level
-- [x] Beach heightmap imported — grey landscape exists
+- [x] Beach heightmap imported — grey landscape exists (old version; zone-profiled replacement generated, not yet imported)
 - [ ] Zone 0–4 geometry, obstacles, bunkers not yet placed
 - [ ] Fog not yet configured
 
