@@ -175,8 +175,6 @@ A comrade in the next foxhole screams. The far end of the communication trench g
 - [ ] Exact number of limb hits required to enter wounded state
 - [ ] Exact number and placement of shell craters in Zone 1
 - [ ] Czech hedgehog hit detection — gap probability vs. physics
-- [ ] Enemy MG bunker fire pattern — sweep? fixed? tracking?
-- [ ] Enemy infantry AI behavior
 - [ ] Barbed wire crossing mechanic — time cost? increased hit risk?
 - [ ] Whether artillery strike events exist (environmental threat)
 - [ ] Sound design — gunfire, impacts, screams, wind, etc.

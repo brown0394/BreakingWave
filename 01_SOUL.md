@@ -7,8 +7,7 @@ The player is not a hero. The player is the people who were there that day.
 Both sides.
 
 When you die, it's not over — another pair of eyes opens.
-The eyes of someone who was watching "you" die.
-That someone could be an ally, or the enemy who shot you.
+That opening eyes is someone could be an ally, or the enemy who shot you.
 
 ## Core Emotions
 
@@ -40,7 +39,7 @@ The sensation that "the people who were there that day — on both sides — eac
 - **Narrative method**: Pre-written static text (no dynamic generation)
 - **Both sides playable**: Allied and German forces both playable
 - **NPC management**: Important NPCs can die too. Pool kept generous
-- **Team size**: 2 (writer/developer + Ash)
+- **Team size**: 2 (writer/developer + Claude)
 
 ---
 
@@ -77,17 +76,3 @@ If an Allied soldier's narrative mentions "the person who shot me,"
 the next playable character can be that enemy soldier.
 And if the enemy soldier's narrative mentions "the people coming up,"
 it returns to the Allied side.
-
----
-
-## Open Questions
-
-- [ ] Narrative presentation — Text only? Text + AI narration? (TTS quality verification needed)
-- [ ] Total character count — Decide after playtesting. Tentatively 6~8
-- [ ] Combat system details — Movement + cover + shooting specifics
-- [ ] Enemy gameplay differences — Defense vs offense
-- [ ] Death camera direction — Fall? Fade? Gaze lock?
-- [ ] Transition direction — How the new character's eyes open
-- [ ] Role of sound/music
-- [ ] If using narration: sentence break units and silence control
-- [ ] Per-zone playtime balance (adjust after prototype)

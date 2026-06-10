@@ -227,6 +227,8 @@ Tier AI complexity based on distance from player.
 
 ## UE Implementation Notes
 
+Data-oriented per Decision 021: one ally NPC system ticks an array of NPC state structs (type, position, behavior state, AI tier); NPC actors are visual shells (mesh, animation, ragdoll).
+
 ### NPC Spawning
 - NPC pooling system — pre-create and reuse
 - Spawn/despawn at fog boundary, only outside camera frustum
@@ -243,9 +245,8 @@ Tier AI complexity based on distance from player.
 - On collection: play reach-out animation (while in cover) or crouch animation (while moving)
 
 ### Tiered AI
-- Use UE's Significance Manager
-- Adjust tick rate by distance: close = every frame, mid = 0.5s, far = no tick
-- Link LOD and AI tiers
+- Tier = update frequency per array element in the system loop: close = every frame, mid = every 0.5s, far = animation only
+- Link mesh LOD to the same tiers
 
 ---
 

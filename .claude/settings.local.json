@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "PowerShell($dirs = Get-ChildItem -Path \"C:\\\\Users\\\\user\\\\Documents\\\\Unreal Projects\\\\BreakingWave\" -Force | Where-Object {$_.PSIsContainer}; $dirs | Select-Object Name)"
+      "PowerShell($dirs = Get-ChildItem -Path \"C:\\\\Users\\\\user\\\\Documents\\\\Unreal Projects\\\\BreakingWave\" -Force | Where-Object {$_.PSIsContainer}; $dirs | Select-Object Name)",
+      "PowerShell(Get-ChildItem Content\\\\__ExternalActors__ -Recurse -File | Sort-Object LastWriteTime -Descending | Select-Object -First 12 LastWriteTime, @{N='Path';E={$_.FullName.Replace\\('C:\\\\Users\\\\user\\\\Documents\\\\Unreal Projects\\\\BreakingWave\\\\Content\\\\__ExternalActors__\\\\',''\\)}} | Format-Table -AutoSize | Out-String -Width 200)"
     ]
   }
 }

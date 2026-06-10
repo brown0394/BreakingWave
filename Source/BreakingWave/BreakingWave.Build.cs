@@ -15,8 +15,6 @@ public class BreakingWave : ModuleRules
 			"InputCore",
 			"EnhancedInput",
 			"AIModule",
-			"StateTreeModule",
-			"GameplayStateTreeModule",
 			"UMG",
 			"Slate"
 		});
@@ -24,13 +22,7 @@ public class BreakingWave : ModuleRules
 		PrivateDependencyModuleNames.AddRange(new string[] { });
 
 		PublicIncludePaths.AddRange(new string[] {
-			"BreakingWave",
-			"BreakingWave/Variant_Horror",
-			"BreakingWave/Variant_Horror/UI",
-			"BreakingWave/Variant_Shooter",
-			"BreakingWave/Variant_Shooter/AI",
-			"BreakingWave/Variant_Shooter/UI",
-			"BreakingWave/Variant_Shooter/Weapons"
+			"BreakingWave"
 		});
 
 		// Uncomment if you are using Slate UI

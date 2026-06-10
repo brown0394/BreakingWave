@@ -1,6 +1,6 @@
 # Current Status
 
-> Last updated: 2026-05-10
+> Last updated: 2026-06-10
 
 ## Phase: Step 1 — Grey Box Beach (In Progress)
 
@@ -10,8 +10,7 @@ Code exists. Terrain exists (heightmap-generated grey landscape). Grey-box detai
 
 ### Documents
 - [x] Project mental model (01_SOUL.md)
-- [x] Collaboration guide (00_CLAUDE_GUIDE.md)
-- [x] Decision log (03_DECISIONS.md) — 20 entries
+- [x] Decision log (03_DECISIONS.md) — 21 entries
 - [x] Design principles (04_PRINCIPLES.md) — 7 principles
 - [x] Beach map v2 (05_ZONES.md) — 5 zones, 3 bunkers, 3 infantry positions, comm trenches
 - [x] Combat system design (06_COMBAT.md) — controls, damage, cover, per-zone rhythm
@@ -26,7 +25,6 @@ Code exists. Terrain exists (heightmap-generated grey landscape). Grey-box detai
 - [x] BreakingWaveCharacter — base first-person character (walk + sprint)
 - [x] BreakingWaveCameraManager — pitch-limited camera manager stub
 - [x] BreakingWaveGameMode / PlayerController — base classes
-- [x] Variant_Shooter/ — exploratory shooter prototype (AI, weapons, UI — separate from main game)
 
 ### Level
 - [x] Beach heightmap imported — grey landscape exists
@@ -44,7 +42,7 @@ Code exists. Terrain exists (heightmap-generated grey landscape). Grey-box detai
 
 ## What Was Done (since last update)
 
-- UE5 project created
-- First-person base character implemented (BreakingWaveCharacter) with walk/sprint
-- Variant_Shooter exploratory prototype built (separate subfolder, not the main game yet)
-- Beach heightmap generated and imported as grey landscape
+- Deleted Variant_Shooter template code and content (unused UE template exploration; recoverable from git history)
+- Deleted 00_CLAUDE_GUIDE.md (obsolete — CLAUDE.md now covers collaboration)
+- Logged Decision 021 (data-oriented NPC managers, not per-NPC AIControllers) and updated 08/09 implementation notes to match
+- Doc cleanup: removed open questions already settled by decisions, aligned comment rule in 04_PRINCIPLES.md with CLAUDE.md, removed the "Ash" naming, added tunable-values rule and doc-update rule to CLAUDE.md

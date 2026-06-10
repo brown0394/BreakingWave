@@ -188,25 +188,27 @@ The Allied NPCs running alongside the player also need behavior.
 - The next playable character is somewhere among these NPCs
 - Must not be too smart — these are people each trying to survive in the chaos of battle
 
-Detailed Allied NPC AI is covered in a separate document.
+Detailed Allied NPC AI is covered in 09_ALLY_NPC.md.
 
 ---
 
 ## UE Implementation Notes
 
+Data-oriented per Decision 021: managers tick arrays of state structs; actors are visual shells.
+
 ### MG AI
-- Attach AIController to each bunker
-- Store current target, priority score, rotation state, and stop state in Blackboard
-- Behavior Tree: evaluate target → rotate → fire → check for stop, loop
+- One MG system holds an array of 3 MG state structs (current target, priority score, yaw, rotation state, stop state)
+- Update loop per bunker: evaluate target → rotate → fire → check for stop
 - Priority evaluation every 0.3–0.5 seconds (not every frame)
 - Rotation: Lerp MG mesh Yaw at max rotation speed
 - Stops: random timer + type selection → pause firing for that duration
+- Bunker actors only carry mesh, muzzle flash, and audio
 
 ### Infantry AI
-- AIController on each soldier
-- Behavior Tree: cover → (check triggers) → move or rise → aim → fire → cover
+- One infantry system ticks an array of soldier state structs; soldier actors carry mesh, animation, and ragdoll
+- State cycle per soldier: cover → (check triggers) → move or rise → aim → fire → cover
 - Movement trigger checks: impact detection (hit event within radius), comrade death event, enemy distance check
-- NavMesh for movement (inside trench / position)
+- NavMesh path requests for movement (inside trench / position)
 - Accuracy: distance-based base value × random variance
 
 ---
@@ -218,6 +220,5 @@ Detailed Allied NPC AI is covered in a separate document.
 - [ ] Infantry count finalized (Zone 3: ~7 is tentative)
 - [ ] Infantry aiming time value — tune through testing
 - [ ] Infantry inter-position movement frequency and condition details
-- [ ] Detailed Allied NPC AI design (separate document)
 - [ ] Allied NPC behavior when enemy is playable
 - [ ] Zone 4 bunker breakthrough mechanic (grenade? entry? suppression?)

@@ -1,8 +1,9 @@
 # Development Checklist
 
-This document is for you, not Ash.
-Follow this order when you start coding.
-Check each step when it's done, and update STATUS.md.
+Follow this order when coding.
+Check each item when it's done, and update 02_STATUS.md.
+Legend: `[x]` done · `[~]` partially done · `[ ]` not started.
+"Relevant docs" per step = what to read before working on that step (in addition to the always-read docs in CLAUDE.md).
 
 ---
 
@@ -22,7 +23,7 @@ Check each step when it's done, and update STATUS.md.
 - [ ] Walk through it yourself and feel whether the zone sizes are right
 
 **When done**: Judge whether zone sizes feel appropriate. Adjust if too short or too long.
-**Document to give Ash**: 05_ZONES.md
+**Relevant docs**: 05_ZONES.md
 
 ---
 
@@ -42,7 +43,7 @@ Check each step when it's done, and update STATUS.md.
   - [ ] Zone 4 transit time: ___ seconds
 
 **When done**: Record zone transit times in 05_ZONES.md.
-**Documents to give Ash**: 04_PRINCIPLES.md, 07_CAMERA.md (headbob section)
+**Relevant docs**: 04_PRINCIPLES.md, 07_CAMERA.md (headbob section)
 
 ---
 
@@ -50,7 +51,7 @@ Check each step when it's done, and update STATUS.md.
 > Goal: Feel "run and die."
 
 - [ ] Place one MG Actor in a bunker
-- [ ] Implement MG AIController
+- [ ] Implement MG targeting system (manager + state struct, Decision 021)
   - [ ] Priority-based target selection
   - [ ] Rotation speed limit
   - [ ] Factor-based accuracy
@@ -65,7 +66,7 @@ Check each step when it's done, and update STATUS.md.
   - [ ] Difficulty feel: too easy? impossible?
 
 **When done**: Record accuracy, rotation speed, and stop frequency values in 08_ENEMY_AI.md.
-**Documents to give Ash**: 08_ENEMY_AI.md, 06_COMBAT.md
+**Relevant docs**: 08_ENEMY_AI.md, 06_COMBAT.md
 
 ---
 
@@ -97,7 +98,7 @@ Check each step when it's done, and update STATUS.md.
   - [ ] Does the camera clip into terrain?
 
 **When done**: Record death camera fall values and wounded state values in 07_CAMERA.md.
-**Documents to give Ash**: 07_CAMERA.md, 06_COMBAT.md
+**Relevant docs**: 07_CAMERA.md, 06_COMBAT.md
 
 ---
 
@@ -123,7 +124,7 @@ Check each step when it's done, and update STATUS.md.
 **When this step is done, the core loop is running.**
 This is where you'll know "does this game work."
 
-**Documents to give Ash**: 01_SOUL.md, 07_CAMERA.md
+**Relevant docs**: 01_SOUL.md, 07_CAMERA.md
 
 ---
 
@@ -152,7 +153,7 @@ This is where you'll know "does this game work."
   - [ ] Aimed fire
   - [ ] FOV reduction when aiming, sway increase while wounded
 
-**Documents to give Ash**: 08_ENEMY_AI.md, 09_ALLY_NPC.md, 06_COMBAT.md
+**Relevant docs**: 08_ENEMY_AI.md, 09_ALLY_NPC.md, 06_COMBAT.md
 
 ---
 
@@ -168,7 +169,7 @@ This is where you'll know "does this game work."
 - [ ] Insert enemy narrative text
 - [ ] Test Allied → German → Allied transitions
 
-**Documents to give Ash**: 01_SOUL.md, 07_CAMERA.md, 05_ZONES.md
+**Relevant docs**: 01_SOUL.md, 07_CAMERA.md, 05_ZONES.md
 
 ---
 
@@ -187,40 +188,7 @@ This is where you'll know "does this game work."
 
 ## Document Usage Guide
 
-### Documents to Give Ash/Sonnet in a Coding Session
-
-**Always provide:**
-- 01_SOUL.md — To not lose direction
-- 02_STATUS.md — To know where we are
-
-**Add based on the task:**
-- Movement/camera work → 07_CAMERA.md
-- Combat/hit work → 06_COMBAT.md
-- MG/infantry AI work → 08_ENEMY_AI.md
-- Allied NPC work → 09_ALLY_NPC.md
-- Map/zone work → 05_ZONES.md
-- Narrative related → 01_SOUL.md + 05_ZONES.md
-
-**Don't need to provide:**
-- 00_CLAUDE_GUIDE.md — Only when needed
-- 03_DECISIONS.md — Only when a decision is in question
-- 04_PRINCIPLES.md — Provide once at the start of a new session
-
-### Why Not Give Everything at Once
-
-The full document set adds up to quite a lot.
-Giving it all at once creates two problems:
-
-1. **Token waste** — Context space is precious on the Pro plan.
-   There's no need to include the camera document when coding MG AI.
-   Better to use that space for actual code and conversation.
-
-2. **Diluted focus** — Too many documents and the AI reads all of them
-   and tries to consider all of them. That actually causes it to miss the core.
-   Give 2–3 relevant documents for the task at hand
-   and it focuses on those and produces more accurate code.
-
-**Exception: when discussing design, give more.**
-When the question is not "code this" but "is this direction right,"
-provide SOUL + DECISIONS + relevant documents generously.
-Broad context is needed for judgment.
+Document routing lives in CLAUDE.md ("When to Read Each Document").
+Read only the docs relevant to the task — the full set dilutes focus.
+Exception: design discussions ("is this direction right?") warrant reading
+01_SOUL.md + 03_DECISIONS.md + relevant docs broadly.

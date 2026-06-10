@@ -18,7 +18,7 @@ Records decisions and their reasoning. To prevent future "why did we do this?"
 
 ### 003 — Keep scope small
 - **Date**: 2026-04-04
-- **Decision**: Scale to a 2-person team (writer/developer + Ash)
+- **Decision**: Scale to a 2-person team (writer/developer + Claude)
 - **Reason**: Excessive scope is the biggest enemy of completion.
 
 ### 004 — Unreal Engine + C++ + First-person
@@ -110,3 +110,9 @@ Records decisions and their reasoning. To prevent future "why did we do this?"
 - **Date**: 2026-04-05
 - **Decision**: Wounded ally NPCs call for help, but the player cannot help. Help mechanic intentionally not included.
 - **Reason**: Having to hear it and move on is more powerful than any text. With a help mechanic, it becomes a "help or not" game choice; without it, it becomes a "can only listen" emotional experience.
+
+### 021 — NPC systems are data-oriented managers, not per-NPC AIControllers
+- **Date**: 2026-06-10
+- **Decision**: Game systems (allied NPCs, enemy infantry, MG bunkers) are implemented as managers that tick arrays of state structs. NPC actors are thin visual shells (mesh, animation, ragdoll). UE framework boundary classes (GameMode, PlayerController, Pawn, Character) remain standard.
+- **Reason**: Dozens of simultaneous NPCs with per-NPC AIControllers, Behavior Trees, and Blackboards fight both the data-oriented collaboration rule and the tiered-AI performance plan. One manager iterating structs makes distance-tiering trivial (tier = update frequency per array element), keeps all behavior logic in one readable place, and matches how the design docs already think (pools, density curves, type ratios).
+- **Considered alternative**: Standard UE stack (AIController + Behavior Tree per NPC). Fine for 3 bunkers, scales poorly to 90 NPCs, scatters logic across BT assets that are hard to read in code review.

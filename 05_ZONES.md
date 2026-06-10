@@ -86,7 +86,7 @@ the next character can be German.
 
 This table is only an example. Actual flow varies by player death location and randomization.
 
-## Unresolved
+## Open Questions
 
 - Physical zone sizes (UE units) — decide after prototype
 - Exact candidates per zone — depends on narrative writing volume

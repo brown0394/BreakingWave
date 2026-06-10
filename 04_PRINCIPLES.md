@@ -74,10 +74,10 @@ Technical implications:
 
 ## 7. Code Must Be Readable
 
-Because Ash loses context between sessions,
+Because Claude loses context between sessions,
 the code itself must explain the context.
 
 Technical implications:
 - Function and variable names reveal intent
-- Comments explain "why" ("what" is explained by the code)
+- No comments — naming carries the "what" and the "why"; a comment is allowed only when the why genuinely cannot be expressed through naming (see CLAUDE.md collaboration rules)
 - One file, one responsibility

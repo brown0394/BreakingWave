@@ -6,7 +6,7 @@
 |------|----------|
 | `01_SOUL.md` | Game vision, core emotions, confirmed decisions, priorities, open questions |
 | `02_STATUS.md` | Current phase, what exists, what's done, next steps |
-| `03_DECISIONS.md` | 20 logged decisions with reasoning (why, not just what) |
+| `03_DECISIONS.md` | Logged decisions with reasoning (why, not just what) |
 | `04_PRINCIPLES.md` | 7 design principles — the "why" behind code and design choices |
 | `05_ZONES.md` | Beach map, 5-zone layout, character pool structure, gaze-crossing examples |
 | `06_COMBAT.md` | Player controls, damage model, cover system, combat rhythm per zone |
@@ -53,4 +53,14 @@
 - **Death is not retry**: The death → narrative → transition sequence must be seamless, no loading.
 - **Two-shot damage**: Headshot kills instantly. Torso takes two hits. Wounded state does not recover.
 - **Fog is load-bearing**: Removes time sense + limits visibility + enables NPC spawn/despawn outside view.
-- **Code readability is priority 3**: Function and variable names reveal intent. Comments explain why, not what.
+- **Code readability is priority 3**: Function and variable names reveal intent.
+- **All numbers are tentative**: Every numeric value in the design docs (damage multipliers, timings, ratios, distances) is a starting point for tuning unless it is recorded in `03_DECISIONS.md`. Implement them as named constants in one obvious place, never as scattered literals.
+
+## Collaboration Rules
+
+- **Stop and ask on ambiguity**: If a request is unclear, contradictory, or could go multiple ways, stop before writing any code and ask a targeted question. Do not guess and proceed.
+- **Flag assumptions explicitly**: If something is being assumed rather than verified (from docs, code, or the user), say so before acting on it. Example: "I'm assuming X — is that right?"
+- **No comments in code**: Write readable code through clear naming only. Do not add inline comments or docstrings unless the why is genuinely non-obvious and cannot be expressed by naming alone.
+- **Data-oriented over object-oriented**: Prefer flat data structures, arrays of structs, and systems that operate on data in bulk. Avoid deep inheritance hierarchies, virtual dispatch, and encapsulation for its own sake. Design around what data exists and how it flows, not around objects and their behavior.
+  - UE framework boundary classes (GameMode, PlayerController, Pawn, Character) are fine — fighting the engine is not the goal. The rule governs game systems: prefer one manager ticking an array of state structs over per-NPC AIControllers, Behavior Trees, and Blackboards. See Decision 021.
+- **Update the docs when work completes**: After finishing meaningful work, update `02_STATUS.md` (phase, what exists, next steps). Log new decisions in `03_DECISIONS.md`. Record tuned values in the doc that `10_CHECKLIST.md` names for that step. When a decision settles an open question, delete that question from every doc that lists it.
