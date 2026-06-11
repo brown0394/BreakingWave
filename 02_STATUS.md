@@ -1,6 +1,6 @@
 # Current Status
 
-> Last updated: 2026-06-10
+> Last updated: 2026-06-11
 
 ## Phase: Step 1 — Grey Box Beach (In Progress)
 
@@ -10,7 +10,7 @@ Code exists. Terrain exists (heightmap-generated grey landscape). Grey-box detai
 
 ### Documents
 - [x] Project mental model (01_SOUL.md)
-- [x] Decision log (03_DECISIONS.md) — 21 entries
+- [x] Decision log (03_DECISIONS.md) — 22 entries
 - [x] Design principles (04_PRINCIPLES.md) — 7 principles
 - [x] Beach map v2 (05_ZONES.md) — 5 zones, 3 bunkers, 3 infantry positions, comm trenches
 - [x] Combat system design (06_COMBAT.md) — controls, damage, cover, per-zone rhythm
@@ -30,7 +30,7 @@ Code exists. Terrain exists (heightmap-generated grey landscape). Grey-box detai
 - [x] Tools/GenerateBeachHeightmap.ps1 — generates the zone-profiled heightmap (SourceAssets/BeachHeightmap_1009.png); re-run after editing its Profile table
 
 ### Level
-- [x] Beach heightmap imported — grey landscape exists (old version; zone-profiled replacement generated, not yet imported)
+- [x] Beach heightmap imported at scale 100/100/200 (Decision 022) — zone-profiled terrain with tactical relief (dunes, berm, wavy bluff) confirmed looking right in editor
 - [ ] Zone 0–4 geometry, obstacles, bunkers not yet placed
 - [ ] Fog not yet configured
 
@@ -45,7 +45,6 @@ Code exists. Terrain exists (heightmap-generated grey landscape). Grey-box detai
 
 ## What Was Done (since last update)
 
-- Deleted Variant_Shooter template code and content (unused UE template exploration; recoverable from git history)
-- Deleted 00_CLAUDE_GUIDE.md (obsolete — CLAUDE.md now covers collaboration)
-- Logged Decision 021 (data-oriented NPC managers, not per-NPC AIControllers) and updated 08/09 implementation notes to match
-- Doc cleanup: removed open questions already settled by decisions, aligned comment rule in 04_PRINCIPLES.md with CLAUDE.md, removed the "Ash" naming, added tunable-values rule and doc-update rule to CLAUDE.md
+- Added tactical relief to GenerateBeachHeightmap.ps1: 3 sightline-blocking dunes in Zone 3, shingle berm with gaps at the Zone 2/3 boundary, bluff line wavering ±15 m laterally; Zone 1 stays flat by design
+- Settled landscape vertical scale at Z=200 after walkthrough — profile-true heights read flat in first person (Decision 022). Script tables converted to world meters at that scale; PNG unchanged byte-for-byte, no re-import needed
+- Updated 05_ZONES.md heightmap section with world heights and relief features

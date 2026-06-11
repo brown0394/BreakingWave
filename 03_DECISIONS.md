@@ -116,3 +116,9 @@ Records decisions and their reasoning. To prevent future "why did we do this?"
 - **Decision**: Game systems (allied NPCs, enemy infantry, MG bunkers) are implemented as managers that tick arrays of state structs. NPC actors are thin visual shells (mesh, animation, ragdoll). UE framework boundary classes (GameMode, PlayerController, Pawn, Character) remain standard.
 - **Reason**: Dozens of simultaneous NPCs with per-NPC AIControllers, Behavior Trees, and Blackboards fight both the data-oriented collaboration rule and the tiered-AI performance plan. One manager iterating structs makes distance-tiering trivial (tier = update frequency per array element), keeps all behavior logic in one readable place, and matches how the design docs already think (pools, density curves, type ratios).
 - **Considered alternative**: Standard UE stack (AIController + Behavior Tree per NPC). Fine for 3 bunkers, scales poorly to 90 NPCs, scatters logic across BT assets that are hard to read in code review.
+
+### 022 — Landscape import scale is 100/100/200; script tables are world meters
+- **Date**: 2026-06-11
+- **Decision**: The beach landscape imports at scale X=100 Y=100 Z=200 (64 gray steps = 1 m). GenerateBeachHeightmap.ps1 tables/constants are written in world meters at that scale.
+- **Reason**: Profile-true heights at Z=100 (32 m bluff over 1 km) read as nearly flat in first person — confirmed by walkthrough. Doubling vertical relief made the space read correctly. Heights were doubled by halving the encoding (128→64 steps/m) and doubling the table values, which keeps the PNG byte-identical and the script's numbers honest: 1 table meter = 1 world meter.
+- **Considered alternative**: Keep Z=100 canonical and double the encoded heights — same world result, but forces a re-import and makes the 16-bit range tighter for no benefit.
