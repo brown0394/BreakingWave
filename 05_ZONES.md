@@ -87,6 +87,10 @@ Tactical relief baked into the heightmap (tables/constants at the top of the scr
 - Shingle berm ridge at the Zone 2/3 boundary (Y ≈ 478), up to ~2.8 m with gaps —
   partial cover with exposed crossings
 - Bluff and defense line waver ±15 m laterally instead of running straight
+- 13 shell craters with raised rims (Craters table), mostly Zone 1 with a few bleeding
+  into Zone 0/2 edges. Only the 3 deep ones (X ≈ 150/430/610, 1.6–2.0 m deep + ~0.3–0.6 m rim)
+  are usable cover — kill-zone cover stays scarce by design. The ~10 shallow ones
+  (0.5–0.9 m) are bombardment dressing, no protection from plunging MG fire
 
 Zone lengths are first guesses. Walk the grey-box (Step 1), then adjust the
 Profile table at the top of the script, re-run it, and re-import.

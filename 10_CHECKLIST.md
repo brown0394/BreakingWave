@@ -13,14 +13,14 @@ Legend: `[x]` done · `[~]` partially done · `[ ]` not started.
 - [x] Create UE project (first-person template base)
 - [~] Build beach terrain with BSP or basic geometry
   - [x] Heightmap-generated grey landscape imported
-  - [ ] Slopes and boundaries for Zones 0–4 confirmed/adjusted
-  - [ ] 1–2 shell craters (Zone 1)
-  - [ ] Czech hedgehog placement (Zone 2)
-  - [ ] Sand berms, debris piles (Zone 3)
-  - [ ] Exterior of 3 bunkers (Zone 4)
-  - [ ] 3 landing craft with ramps (Zone 0)
-- [ ] Fog setup (limit visibility to 30–40m)
-- [ ] Walk through it yourself and feel whether the zone sizes are right
+  - [ ] Slopes and boundaries for Zones 0–4 confirmed/adjusted (deferred with the walkthrough)
+  - [x] Shell craters (3 deep + 10 shallow, raised rims, baked into heightmap)
+  - [x] Czech hedgehog placement (Zone 2) — Tools/PlaceBeachObstacles.py
+  - [x] Sand berms (baked into heightmap), debris piles (Zone 3, placement tool)
+  - [x] Exterior of 3 bunkers (Zone 4) — Tools/PlaceHeroPieces.py
+  - [x] 3 landing craft with ramps (Zone 0) — Tools/PlaceHeroPieces.py
+- [ ] Fog setup (limit visibility to 30–40m) — DEFERRED until after more system work (2026-07-04)
+- [ ] Walk through it yourself and feel whether the zone sizes are right — DEFERRED with fog
 
 **When done**: Judge whether zone sizes feel appropriate. Adjust if too short or too long.
 **Relevant docs**: 05_ZONES.md

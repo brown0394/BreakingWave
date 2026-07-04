@@ -2,7 +2,15 @@
   "permissions": {
     "allow": [
       "PowerShell($dirs = Get-ChildItem -Path \"C:\\\\Users\\\\user\\\\Documents\\\\Unreal Projects\\\\BreakingWave\" -Force | Where-Object {$_.PSIsContainer}; $dirs | Select-Object Name)",
-      "PowerShell(Get-ChildItem Content\\\\__ExternalActors__ -Recurse -File | Sort-Object LastWriteTime -Descending | Select-Object -First 12 LastWriteTime, @{N='Path';E={$_.FullName.Replace\\('C:\\\\Users\\\\user\\\\Documents\\\\Unreal Projects\\\\BreakingWave\\\\Content\\\\__ExternalActors__\\\\',''\\)}} | Format-Table -AutoSize | Out-String -Width 200)"
+      "PowerShell(Get-ChildItem Content\\\\__ExternalActors__ -Recurse -File | Sort-Object LastWriteTime -Descending | Select-Object -First 12 LastWriteTime, @{N='Path';E={$_.FullName.Replace\\('C:\\\\Users\\\\user\\\\Documents\\\\Unreal Projects\\\\BreakingWave\\\\Content\\\\__ExternalActors__\\\\',''\\)}} | Format-Table -AutoSize | Out-String -Width 200)",
+      "PowerShell(& \"C:\\\\Users\\\\user\\\\Documents\\\\Unreal Projects\\\\BreakingWave\\\\Tools\\\\GenerateBeachHeightmap.ps1\")",
+      "Read(//c/Program Files/Epic Games//**)",
+      "Read(//c/Program Files/Epic Games/UE_5.6/Engine/Binaries/Win64/**)",
+      "Bash(\"/c/Program Files/Epic Games/UE_5.6/Engine/Binaries/Win64/UnrealEditor-Cmd.exe\" \"C:\\\\Users\\\\user\\\\Documents\\\\Unreal Projects\\\\BreakingWave\\\\BreakingWave.uproject\" -run=pythonscript -script=\"C:\\\\Users\\\\user\\\\.claude\\\\jobs\\\\4759968f\\\\tmp\\\\diag_trace.py\" -unattended -nopause -nosplash)",
+      "Bash(echo \"EXIT=$?\")",
+      "PowerShell(& \"C:\\\\Users\\\\user\\\\.claude\\\\jobs\\\\4759968f\\\\tmp\\\\ProbeHeightmap.ps1\")",
+      "PowerShell(& \"C:\\\\Users\\\\user\\\\Documents\\\\Unreal Projects\\\\BreakingWave\\\\Tools\\\\GenerateBeachHeightmap.ps1\"; & \"C:\\\\Users\\\\user\\\\.claude\\\\jobs\\\\4759968f\\\\tmp\\\\ProbeHeightmap.ps1\")",
+      "PowerShell($source = Get-Content \"C:\\\\Users\\\\user\\\\.claude\\\\jobs\\\\4759968f\\\\tmp\\\\ProbeHeightmap.ps1\" -Raw; $probe = $source -replace '621, 366', '624, 366'; Invoke-Expression $probe)"
     ]
   }
 }

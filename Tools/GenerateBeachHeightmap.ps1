@@ -16,6 +16,8 @@
 #   - 3 dunes in Zone 3 (Dunes table), tall enough to block sightlines while prone/crouched
 #   - shingle berm ridge with gaps at the Zone 2/3 boundary (Berm constants)
 #   - bluff line wavers laterally +/-15 m from Zone 3 inland (BluffWaviness)
+#   - shell craters with raised rims, mostly Zone 1 (Craters table): 3 deep ones are the only
+#     cover in the kill zone (scarce by design), ~10 shallow ones are bombardment dressing
 # All numbers tentative per CLAUDE.md - edit the tables/constants below and re-run.
 
 param([string]$OutputPath = (Join-Path (Split-Path $PSScriptRoot -Parent) "SourceAssets\BeachHeightmap_1009.png"))
@@ -48,6 +50,31 @@ public static class BeachHeightmap
         { 510, 548, 6.0, 30, 12 },
         { 770, 518, 4.4, 22,  9 }
     };
+
+    // Shell craters, mostly Zone 1 (rows 310-390), a few bleeding into Zone 0/2 edges.
+    // Deep ones (>= ~1.5 m) are usable cover and stay SCARCE by design - Zone 1 is the kill
+    // zone. Shallow ones (< ~1 m) are bombardment dressing, no protection from plunging fire.
+    // Each crater gets a raised rim (see CraterRim* constants below).
+    // { center col (m), center row (m), depth (m), along-shore radius (m), inland radius (m) }
+    static readonly double[,] Craters = {
+        { 150, 372, -1.6, 5.5, 4.5 },
+        { 430, 348, -1.8, 6.0, 5.0 },
+        { 610, 366, -2.0, 7.0, 5.5 },
+        {  80, 330, -0.6, 4.0, 3.5 },
+        { 200, 302, -0.6, 4.5, 3.8 },
+        { 260, 358, -0.8, 5.0, 4.0 },
+        { 350, 322, -0.5, 3.5, 3.0 },
+        { 505, 340, -0.7, 4.5, 3.8 },
+        { 560, 398, -0.8, 4.8, 4.0 },
+        { 700, 328, -0.6, 4.0, 3.2 },
+        { 760, 375, -0.9, 5.5, 4.5 },
+        { 880, 350, -0.7, 4.2, 3.6 },
+        { 940, 318, -0.5, 3.6, 3.0 }
+    };
+
+    const double CraterRimRadius = 2.0;
+    const double CraterRimWidth = 0.5;
+    const double CraterRimHeightRatio = 0.3;
 
     const double BermRow = 478;
     const double BermMaxHeight = 2.8;
@@ -131,6 +158,24 @@ public static class BeachHeightmap
         return sum;
     }
 
+    static double CraterHeight(double x, double y)
+    {
+        double sum = 0;
+        for (int i = 0; i < Craters.GetLength(0); i++)
+        {
+            double dx = (x - Craters[i, 0]) / Craters[i, 3];
+            double dy = (y - Craters[i, 1]) / Craters[i, 4];
+            double r = Math.Sqrt(dx * dx + dy * dy);
+            double depth = Craters[i, 2];
+            double bowl = depth * Math.Exp(-r * r * 0.5);
+            double rimOffset = r - CraterRimRadius;
+            double rim = -depth * CraterRimHeightRatio
+                       * Math.Exp(-(rimOffset * rimOffset) / (2 * CraterRimWidth * CraterRimWidth));
+            sum += bowl + rim;
+        }
+        return sum;
+    }
+
     public static void Generate(string path)
     {
         ushort[] pixels = new ushort[Size * Size];
@@ -145,7 +190,8 @@ public static class BeachHeightmap
                 double meters = baseHeight
                               + Noise(col, row) * amplitude
                               + BermHeight(col, row)
-                              + DuneHeight(col, row);
+                              + DuneHeight(col, row)
+                              + CraterHeight(col, row);
                 double value = 32768.0 + meters * 64.0;
                 if (value < 0) value = 0;
                 if (value > 65535) value = 65535;
