@@ -1,8 +1,8 @@
 # Current Status
 
-> Last updated: 2026-07-04
+> Last updated: 2026-07-05
 
-## Phase: Step 1 geometry DONE → Step 2 — First-Person Movement
+## Phase: Step 2 — First-Person Movement (prone done, slide + headbob remain)
 
 All grey-box geometry is placed. Fog and the zone-size walkthrough are DEFERRED until after
 more system work (user decision 2026-07-04) — pick them up before tuning zone sizes.
@@ -23,7 +23,19 @@ more system work (user decision 2026-07-04) — pick them up before tuning zone 
 
 ### Code (Source/BreakingWave/)
 - [x] UE5 project created (first-person template base)
-- [x] BreakingWaveCharacter — base first-person character (walk + sprint)
+- [x] BreakingWaveCharacter — base first-person character (walk + sprint + prone)
+- [x] Prone (Decision 023): LeftControl toggle, rides engine crouch (instant capsule shrink,
+  clearance check on stand-up), camera drops to ProneEyeHeight above ground; tunables
+  ProneSpeed/ProneCapsuleHalfHeight/ProneEyeHeight on the character. Jump binding removed
+  (no jumping by design); DoJumpStart/DoJumpEnd are empty shims until the BP touch-UI jump
+  nodes are deleted in-editor
+- [x] Prone body animation: user added Epic's AnimStarterPack (UE4 skeleton); all 8 prone anims
+  retargeted to the UE5 mannequin (Tools/RetargetProneAnims.py). While prone the body mesh
+  plays Prone_Idle_UE5 (correct lying shadow) and the FP arms hide; the ABP resumes on
+  stand-up. Known greybox quirks: no crawl anim in the pack (body slides in idle pose while
+  crawling) and arms invisible while prone — both fine until the shooting/visual pass.
+  Prone_Fire/Reload/Death/transition anims are retargeted and waiting in
+  Content/AnimStarterPack/Retarget/ for later systems
 - [x] BreakingWaveCameraManager — pitch-limited camera manager stub
 - [x] BreakingWaveGameMode / PlayerController — base classes
 
@@ -31,6 +43,8 @@ more system work (user decision 2026-07-04) — pick them up before tuning zone 
 - [x] Tools/GenerateBeachHeightmap.ps1 — generates the zone-profiled heightmap (SourceAssets/BeachHeightmap_1009.png); re-run after editing its Profile/Dunes/Berm/Craters tables
 - [x] Tools/PlaceBeachObstacles.py — in-editor Python; spawns grey-box hedgehogs (Zone 2), barbed wire, and debris piles (Zone 3) from editable tables, traced onto the landscape; idempotent (re-run clears prior batch). Requires PythonScriptPlugin + EditorScriptingUtilities (now enabled in .uproject)
 - [x] Tools/PlaceHeroPieces.py — in-editor Python; assembles the 3 Zone 4 bunkers (hollow, sea-facing slit, rear door) and 3 Zone 0 landing craft (open hull + dropped ramp) from SM_Cube; idempotent (GreyboxHero tag, per-assembly subfolders), pieces stay individually tweakable
+- [x] Tools/AddProneInput.py — creates IA_Prone, maps LeftControl in IMC_Default, sets the BP's ProneAction slot; idempotent; edit PRONE_KEY_NAME and re-run to change the key (already run, works headless)
+- [x] Tools/RetargetProneAnims.py — builds IK rigs + UE4→UE5 retargeter (auto chains/mapping/alignment), retargets all 8 AnimStarterPack prone anims to Content/AnimStarterPack/Retarget/*_UE5, sets the BP's ProneBodyIdleAnim; idempotent (already run). NOTE: needs full editor, not commandlet — run in-editor or via `-ExecutePythonScript` (the batch op touches Slate)
 
 ### Level
 - [x] Beach heightmap imported at scale 100/100/200 (Decision 022) — zone-profiled terrain with tactical relief (dunes, berm, wavy bluff) confirmed looking right in editor
@@ -42,12 +56,20 @@ more system work (user decision 2026-07-04) — pick them up before tuning zone 
 
 ## Next Steps
 
-- [ ] **RESUME HERE — Step 2: first-person movement** on BreakingWaveCharacter (read
-  04_PRINCIPLES.md + 07_CAMERA.md headbob section first):
-  1. Prone (instant drop to ground)
-  2. Slide-into-prone (momentum slide)
-  3. Headbob (primarily vertical bounce, small amplitude)
+- [ ] **RESUME HERE — Step 2 continues** (read 04_PRINCIPLES.md + 07_CAMERA.md headbob
+  section first):
+  1. Debug third-person view toggle (debug-only, e.g. console command or spare key): pull the
+     camera back/out so the world-space body mesh is visible in PIE — needed to verify the
+     prone anim and every future body animation without squinting at shadows. Temporarily
+     un-hide the body mesh (`SetOwnerNoSee(false)`) while active. Not a game feature; the
+     game is first-person only
+  2. Feel-check prone + lying animation/shadow in editor (LeftControl; restart editor first —
+     BP and anim assets were saved outside the last session)
+  3. Slide-into-prone (momentum slide while sprinting)
+  4. Headbob (primarily vertical bounce, small amplitude)
 - [ ] **Step 2**: Run through each zone and record transit times in 05_ZONES.md
+- [ ] Editor cleanup while in the BP anyway: delete BP_FirstPersonCharacter's touch-UI jump
+  nodes, then delete the DoJumpStart/DoJumpEnd shims in BreakingWaveCharacter
 
 ### Deferred until after more system work (decided 2026-07-04)
 - [ ] Fog setup (values below) — do this before judging zone sizes; fog is load-bearing
@@ -67,6 +89,24 @@ so world = profile-meters × 100 − 50400 on both axes. Profile coords below wi
 
 ## What Was Done (since last update)
 
+- Session ended 2026-07-05 after wiring the prone body animation; the retargeted anim/shadow
+  has NOT been eyeballed in-game yet. Agreed next action: build a debug third-person view
+  toggle first (see RESUME HERE), then feel-check prone with it
+- Prone body animation wired (2026-07-05): user feel-checked prone (good) but flagged the
+  standing shadow/look; user added AnimStarterPack; wrote Tools/RetargetProneAnims.py which
+  auto-built IK rigs + retargeter in Python and retargeted the 8 prone anims UE4→UE5 headless.
+  Gotcha for the record: IKRetargetBatchOperation crashes in commandlet mode (Slate assert) —
+  use `-ExecutePythonScript` (full editor boot) instead; also call it per-asset so a harmless
+  missing-bone error (center_of_mass) can't abort the batch
+- Prone implemented (2026-07-05, Decision 023): engine-crouch-based, LeftControl toggle,
+  camera lowered by offsetting FirstPersonMesh (head-socket camera doesn't lower without
+  anims). C++ compiled clean; Tools/AddProneInput.py run headless — IA_Prone created,
+  LeftControl mapped in IMC_Default, BP ProneAction slot set, all verified by re-load
+- Jump removed per 06_COMBAT.md: input binding deleted; BP's template touch-UI graph still
+  calls DoJumpStart/DoJumpEnd so they stay as empty shims (BP failed to compile without
+  them) — cleanup queued in Next Steps
+
+### Earlier (2026-07-04)
 - Grey-box geometry COMPLETE: user re-imported the crater heightmap, re-ran the obstacle tool
   (X-cross + bounds-snap fixes), ran the hero-piece tool — everything placed and looks fine
 - Fog + zone-size walkthrough deferred until after more system work (user decision) — next

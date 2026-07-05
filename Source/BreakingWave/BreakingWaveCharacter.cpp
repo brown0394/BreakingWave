@@ -2,6 +2,7 @@
 
 #include "BreakingWaveCharacter.h"
 #include "Animation/AnimInstance.h"
+#include "Animation/AnimSequence.h"
 #include "Camera/CameraComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/SkeletalMeshComponent.h"
@@ -43,6 +44,17 @@ ABreakingWaveCharacter::ABreakingWaveCharacter()
 	GetCharacterMovement()->BrakingDecelerationFalling = 1500.0f;
 	GetCharacterMovement()->AirControl = 0.5f;
 	GetCharacterMovement()->MaxWalkSpeed = WalkSpeed;
+	GetCharacterMovement()->GetNavAgentPropertiesRef().bCanCrouch = true;
+}
+
+void ABreakingWaveCharacter::BeginPlay()
+{
+	Super::BeginPlay();
+
+	GetCharacterMovement()->SetCrouchedHalfHeight(ProneCapsuleHalfHeight);
+	GetCharacterMovement()->MaxWalkSpeedCrouched = ProneSpeed;
+	StandingFirstPersonMeshRelativeLocation = FirstPersonMesh->GetRelativeLocation();
+	StandingBodyAnimClass = GetMesh()->GetAnimClass();
 }
 
 void ABreakingWaveCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
@@ -50,16 +62,15 @@ void ABreakingWaveCharacter::SetupPlayerInputComponent(UInputComponent* PlayerIn
 	// Set up action bindings
 	if (UEnhancedInputComponent* EnhancedInputComponent = Cast<UEnhancedInputComponent>(PlayerInputComponent))
 	{
-		// Jumping
-		EnhancedInputComponent->BindAction(JumpAction, ETriggerEvent::Started, this, &ABreakingWaveCharacter::DoJumpStart);
-		EnhancedInputComponent->BindAction(JumpAction, ETriggerEvent::Completed, this, &ABreakingWaveCharacter::DoJumpEnd);
-
 		// Moving
 		EnhancedInputComponent->BindAction(MoveAction, ETriggerEvent::Triggered, this, &ABreakingWaveCharacter::MoveInput);
 
 		// Sprinting
 		EnhancedInputComponent->BindAction(SprintAction, ETriggerEvent::Started, this, &ABreakingWaveCharacter::DoSprintStart);
 		EnhancedInputComponent->BindAction(SprintAction, ETriggerEvent::Completed, this, &ABreakingWaveCharacter::DoSprintEnd);
+
+		// Prone
+		EnhancedInputComponent->BindAction(ProneAction, ETriggerEvent::Started, this, &ABreakingWaveCharacter::DoProneToggle);
 
 		// Looking/Aiming
 		EnhancedInputComponent->BindAction(LookAction, ETriggerEvent::Triggered, this, &ABreakingWaveCharacter::LookInput);
@@ -114,14 +125,50 @@ void ABreakingWaveCharacter::DoMove(float Right, float Forward)
 
 void ABreakingWaveCharacter::DoJumpStart()
 {
-	// pass Jump to the character
-	Jump();
 }
 
 void ABreakingWaveCharacter::DoJumpEnd()
 {
-	// pass StopJumping to the character
-	StopJumping();
+}
+
+void ABreakingWaveCharacter::DoProneToggle()
+{
+	if (bIsCrouched)
+	{
+		UnCrouch();
+	}
+	else
+	{
+		Crouch();
+	}
+}
+
+void ABreakingWaveCharacter::OnStartCrouch(float HalfHeightAdjust, float ScaledHalfHeightAdjust)
+{
+	Super::OnStartCrouch(HalfHeightAdjust, ScaledHalfHeightAdjust);
+
+	const float GroundZ = GetActorLocation().Z - GetCapsuleComponent()->GetScaledCapsuleHalfHeight();
+	const float EyeDropToProne = FirstPersonCameraComponent->GetComponentLocation().Z - (GroundZ + ProneEyeHeight);
+	FirstPersonMesh->SetRelativeLocation(StandingFirstPersonMeshRelativeLocation - FVector(0.f, 0.f, EyeDropToProne));
+	FirstPersonMesh->SetVisibility(false);
+
+	if (ProneBodyIdleAnim)
+	{
+		GetMesh()->PlayAnimation(ProneBodyIdleAnim, true);
+	}
+}
+
+void ABreakingWaveCharacter::OnEndCrouch(float HalfHeightAdjust, float ScaledHalfHeightAdjust)
+{
+	Super::OnEndCrouch(HalfHeightAdjust, ScaledHalfHeightAdjust);
+
+	FirstPersonMesh->SetRelativeLocation(StandingFirstPersonMeshRelativeLocation);
+	FirstPersonMesh->SetVisibility(true);
+
+	if (ProneBodyIdleAnim)
+	{
+		GetMesh()->SetAnimInstanceClass(StandingBodyAnimClass);
+	}
 }
 
 void ABreakingWaveCharacter::DoSprintStart()

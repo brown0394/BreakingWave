@@ -32,7 +32,8 @@ Legend: `[x]` done · `[~]` partially done · `[ ]` not started.
 
 - [x] Create player character C++ class
 - [x] Implement running
-- [ ] Implement prone (instant drop to ground)
+- [x] Implement prone (instant drop to ground) — LeftControl toggle, feel-check in editor pending
+- [ ] Debug third-person view toggle (dev tool, not a feature) — to verify prone/body animations in PIE
 - [ ] Implement slide-into-prone (momentum slide)
 - [ ] Implement headbob (primarily vertical bounce, small amplitude)
 - [ ] Run through each zone yourself and measure time

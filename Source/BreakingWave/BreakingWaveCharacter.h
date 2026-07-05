@@ -11,6 +11,7 @@ class UInputComponent;
 class USkeletalMeshComponent;
 class UCameraComponent;
 class UInputAction;
+class UAnimSequence;
 struct FInputActionValue;
 
 DECLARE_LOG_CATEGORY_EXTERN(LogTemplateCharacter, Log, All);
@@ -33,10 +34,6 @@ class ABreakingWaveCharacter : public ACharacter
 
 protected:
 
-	/** Jump Input Action */
-	UPROPERTY(EditAnywhere, Category ="Input")
-	UInputAction* JumpAction;
-
 	/** Move Input Action */
 	UPROPERTY(EditAnywhere, Category ="Input")
 	UInputAction* MoveAction;
@@ -44,6 +41,10 @@ protected:
 	/** Sprint Input Action */
 	UPROPERTY(EditAnywhere, Category ="Input")
 	UInputAction* SprintAction;
+
+	/** Prone Input Action */
+	UPROPERTY(EditAnywhere, Category ="Input")
+	UInputAction* ProneAction;
 
 	/** Look Input Action */
 	UPROPERTY(EditAnywhere, Category ="Input")
@@ -72,11 +73,15 @@ protected:
 	UFUNCTION(BlueprintCallable, Category="Input")
 	virtual void DoMove(float Right, float Forward);
 
-	/** Handles jump start inputs from either controls or UI interfaces */
+	/** Handles prone toggle inputs from either controls or UI interfaces */
+	UFUNCTION(BlueprintCallable, Category="Input")
+	virtual void DoProneToggle();
+
+	/** Empty shim: the template touch UI in BP_FirstPersonCharacter still calls this, but jumping is disabled by design (06_COMBAT.md). Delete the BP's jump nodes, then delete this. */
 	UFUNCTION(BlueprintCallable, Category="Input")
 	virtual void DoJumpStart();
 
-	/** Handles jump end inputs from either controls or UI interfaces */
+	/** Empty shim: see DoJumpStart */
 	UFUNCTION(BlueprintCallable, Category="Input")
 	virtual void DoJumpEnd();
 
@@ -96,13 +101,43 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Movement")
 	float RunSpeed = 900.f;
 
+	/** Crawl speed while prone (near-zero by design) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Movement")
+	float ProneSpeed = 60.f;
+
+	/** Collision capsule half height while prone */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Movement")
+	float ProneCapsuleHalfHeight = 40.f;
+
+	/** Camera height above the ground while prone */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Movement")
+	float ProneEyeHeight = 30.f;
+
+	/** Looping full-body pose the world-space mesh plays while prone (body/shadow only; the ABP takes over again on stand-up) */
+	UPROPERTY(EditAnywhere, Category="Animation")
+	UAnimSequence* ProneBodyIdleAnim;
+
 protected:
+
+	virtual void BeginPlay() override;
+
+	virtual void OnStartCrouch(float HalfHeightAdjust, float ScaledHalfHeightAdjust) override;
+
+	virtual void OnEndCrouch(float HalfHeightAdjust, float ScaledHalfHeightAdjust) override;
 
 	/** Set up input action bindings */
 	virtual void SetupPlayerInputComponent(UInputComponent* InputComponent) override;
-	
+
+private:
+
+	FVector StandingFirstPersonMeshRelativeLocation = FVector::ZeroVector;
+
+	TSubclassOf<UAnimInstance> StandingBodyAnimClass;
 
 public:
+
+	/** Prone is implemented on the engine crouch machinery; crouched means prone */
+	bool IsProne() const { return bIsCrouched; }
 
 	/** Returns the first person mesh **/
 	USkeletalMeshComponent* GetFirstPersonMesh() const { return FirstPersonMesh; }
