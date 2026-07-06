@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Engine/TimerHandle.h"
 #include "GameFramework/Character.h"
 #include "Logging/LogMacros.h"
 #include "BreakingWaveCharacter.generated.h"
@@ -110,10 +111,6 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Movement")
 	float RunSpeed = 900.f;
 
-	/** Crawl speed while prone (near-zero by design) */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Movement")
-	float ProneSpeed = 60.f;
-
 	/** Collision capsule half height while prone */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Movement")
 	float ProneCapsuleHalfHeight = 40.f;
@@ -121,6 +118,14 @@ protected:
 	/** Camera height above the ground while prone */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Movement")
 	float ProneEyeHeight = 30.f;
+
+	/** Time the camera and body take to drop into prone (fast — an emergency dive, 06_COMBAT.md) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Movement")
+	float ProneDropDuration = 0.35f;
+
+	/** Time the camera and body take to rise back to standing (slower — standing up is costly) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Movement")
+	float ProneStandUpDuration = 0.9f;
 
 	/** Orbit distance of the debug third person camera */
 	UPROPERTY(EditAnywhere, Category="Debug")
@@ -130,9 +135,19 @@ protected:
 	UPROPERTY(EditAnywhere, Category="Animation")
 	UAnimSequence* ProneBodyIdleAnim;
 
+	/** One-shot the body plays going down, time-compressed to ProneDropDuration */
+	UPROPERTY(EditAnywhere, Category="Animation")
+	UAnimSequence* StandToProneAnim;
+
+	/** One-shot the body plays getting up, time-compressed to ProneStandUpDuration */
+	UPROPERTY(EditAnywhere, Category="Animation")
+	UAnimSequence* ProneToStandAnim;
+
 protected:
 
 	virtual void BeginPlay() override;
+
+	virtual void Tick(float DeltaSeconds) override;
 
 	virtual void OnStartCrouch(float HalfHeightAdjust, float ScaledHalfHeightAdjust) override;
 
@@ -143,11 +158,33 @@ protected:
 
 private:
 
+	void StartEyeHeightBlend(const FVector& TargetRelativeLocation, float Duration);
+
+	void PlayBodyAnimCompressed(UAnimSequence* Anim, float Duration);
+
+	void BeginProneBodyIdle();
+
+	void RestoreStandingBodyAnim();
+
 	FVector StandingFirstPersonMeshRelativeLocation = FVector::ZeroVector;
 
 	TSubclassOf<UAnimInstance> StandingBodyAnimClass;
 
 	bool bDebugThirdPersonViewActive = false;
+
+	bool bEyeHeightBlendActive = false;
+
+	FVector EyeHeightBlendStart = FVector::ZeroVector;
+
+	FVector EyeHeightBlendTarget = FVector::ZeroVector;
+
+	float EyeHeightBlendElapsed = 0.f;
+
+	float EyeHeightBlendDuration = 0.f;
+
+	float ProneTransitionEndTime = 0.f;
+
+	FTimerHandle ProneBodyAnimTimer;
 
 public:
 
@@ -157,6 +194,9 @@ public:
 
 	/** Prone is implemented on the engine crouch machinery; crouched means prone */
 	bool IsProne() const { return bIsCrouched; }
+
+	/** True while dropping into or rising out of prone; movement input is ignored during it */
+	bool IsProneTransitionActive() const;
 
 	/** Returns the first person mesh **/
 	USkeletalMeshComponent* GetFirstPersonMesh() const { return FirstPersonMesh; }

@@ -2,7 +2,7 @@
 
 > Last updated: 2026-07-06
 
-## Phase: Step 2 — First-Person Movement (prone + F6 debug view done; prone feel-check, slide, headbob remain)
+## Phase: Step 2 — First-Person Movement (prone + transitions + F6 debug view done; slide, headbob remain)
 
 All grey-box geometry is placed. Fog and the zone-size walkthrough are DEFERRED until after
 more system work (user decision 2026-07-04) — pick them up before tuning zone sizes.
@@ -24,18 +24,30 @@ more system work (user decision 2026-07-04) — pick them up before tuning zone 
 ### Code (Source/BreakingWave/)
 - [x] UE5 project created (first-person template base)
 - [x] BreakingWaveCharacter — base first-person character (walk + sprint + prone)
-- [x] Prone (Decision 023): LeftControl toggle, rides engine crouch (instant capsule shrink,
-  clearance check on stand-up), camera drops to ProneEyeHeight above ground; tunables
-  ProneSpeed/ProneCapsuleHalfHeight/ProneEyeHeight on the character. Jump binding removed
+- [x] Prone (Decisions 023 + 025): LeftControl toggle, rides engine crouch (instant capsule
+  shrink, clearance check on stand-up), camera drops to ProneEyeHeight above ground; STATIONARY
+  by design — movement input is ignored while prone and during transitions (Decision 025,
+  feel-checked 2026-07-06); tunables ProneCapsuleHalfHeight/ProneEyeHeight on the character. Jump binding removed
   (no jumping by design); DoJumpStart/DoJumpEnd are empty shims until the BP touch-UI jump
   nodes are deleted in-editor
 - [x] Prone body animation: user added Epic's AnimStarterPack (UE4 skeleton); all 8 prone anims
   retargeted to the UE5 mannequin (Tools/RetargetProneAnims.py). While prone the body mesh
   plays Prone_Idle_UE5 (correct lying shadow) and the FP arms hide; the ABP resumes on
-  stand-up. Known greybox quirks: no crawl anim in the pack (body slides in idle pose while
-  crawling) and arms invisible while prone — both fine until the shooting/visual pass.
-  Prone_Fire/Reload/Death/transition anims are retargeted and waiting in
+  stand-up. Known greybox quirk: arms invisible while prone — fine until the shooting/visual
+  pass. The missing crawl anim is a NON-issue now: prone is stationary (Decision 025).
+  Prone_Fire/Reload/Death anims are retargeted and waiting in
   Content/AnimStarterPack/Retarget/ for later systems
+- [x] Prone transition animation (2026-07-06): gameplay stays instant (capsule/speed change on
+  the toggle frame — 06_COMBAT.md "drop instantly"), visuals catch up. Body plays
+  Stand_To_Prone_UE5 time-compressed into ProneDropDuration (0.35 s, a dive) then settles into
+  the prone idle loop; on stand-up plays Prone_To_Stand_UE5 over ProneStandUpDuration (0.9 s —
+  getting up is deliberately slower) then hands back to the ABP. First-person camera no longer
+  teleports: the FP-mesh offset smoothsteps down/up over the same durations (mid-toggle safe —
+  blends start from the current position). Movement input is IGNORED during both transitions
+  (user request 2026-07-06 — moving under the transition motion looked wrong); look input
+  stays live. Tunables ProneDropDuration/ProneStandUpDuration on the character; BP slots set
+  by Tools/SetProneTransitionAnims.py (run headless, idempotent). Both durations are
+  tentative feel numbers
 - [x] Debug third-person view (2026-07-06, Decision 024): **F6** in PIE (DebugExecBindings in
   Config/DefaultInput.ini — dev-builds only, ignored in Shipping) or `DebugThirdPerson` in the
   console toggles a spring-arm orbit camera, un-hides the world-space body mesh, hides the FP
@@ -55,6 +67,7 @@ more system work (user decision 2026-07-04) — pick them up before tuning zone 
 - [x] Tools/PlaceHeroPieces.py — in-editor Python; assembles the 3 Zone 4 bunkers (hollow, sea-facing slit, rear door) and 3 Zone 0 landing craft (open hull + dropped ramp) from SM_Cube; idempotent (GreyboxHero tag, per-assembly subfolders), pieces stay individually tweakable
 - [x] Tools/AddProneInput.py — creates IA_Prone, maps LeftControl in IMC_Default, sets the BP's ProneAction slot; idempotent; edit PRONE_KEY_NAME and re-run to change the key (already run, works headless)
 - [x] Tools/RetargetProneAnims.py — builds IK rigs + UE4→UE5 retargeter (auto chains/mapping/alignment), retargets all 8 AnimStarterPack prone anims to Content/AnimStarterPack/Retarget/*_UE5, sets the BP's ProneBodyIdleAnim; idempotent (already run). NOTE: needs full editor, not commandlet — run in-editor or via `-ExecutePythonScript` (the batch op touches Slate)
+- [x] Tools/SetProneTransitionAnims.py — sets the BP's StandToProneAnim/ProneToStandAnim slots to the retargeted transition anims; idempotent, works headless via `-run=pythonscript` (already run)
 
 ### Level
 - [x] Beach heightmap imported at scale 100/100/200 (Decision 022) — zone-profiled terrain with tactical relief (dunes, berm, wavy bluff) confirmed looking right in editor
@@ -68,9 +81,11 @@ more system work (user decision 2026-07-04) — pick them up before tuning zone 
 
 - [ ] **RESUME HERE — Step 2 continues** (read 04_PRINCIPLES.md + 07_CAMERA.md headbob
   section first):
-  1. Feel-check prone + lying animation in editor: PIE, LeftControl to go prone, press F6
-     to see the body mesh (F6 again to return to first person). Restart the editor first —
-     BP and anim assets were saved outside an earlier session
+  1. Feel-check the prone TRANSITIONS: restart the editor (BP + C++ changed outside the
+     session), PIE, LeftControl down/up — camera should dive fast (0.35 s) and rise slow
+     (0.9 s); F6 to watch the body play the transition anims. WASD should do nothing while
+     prone (Decision 025). Tune the durations on BP_FirstPersonCharacter if the drop reads
+     too slow for an emergency dive
   2. Slide-into-prone (momentum slide while sprinting)
   3. Headbob (primarily vertical bounce, small amplitude)
 - [ ] **Step 2**: Run through each zone and record transit times in 05_ZONES.md
@@ -95,6 +110,21 @@ so world = profile-meters × 100 − 50400 on both axes. Profile coords below wi
 
 ## What Was Done (since last update)
 
+- Prone made stationary, crawl sway reverted (2026-07-06, Decision 025): a procedural crawl
+  placeholder (speed-scaled idle play rate + yaw/roll sway) was built earlier the same day —
+  user feel-checked it and rejected it; moving while prone itself was cut. DoMove now ignores
+  input while prone (and MaxWalkSpeedCrouched = 0); ProneSpeed and the ProneCrawl* tunables
+  are deleted. 06_COMBAT.md prone bullet updated. Slide-into-prone stays planned — it is
+  momentum, not input
+- Prone transition animation wired (2026-07-06): user confirmed the prone feel-check passed,
+  then asked for the missing transition anims. OnStartCrouch/OnEndCrouch now sequence
+  transition one-shot → idle loop / → ABP restore via a timer, with the one-shots
+  time-compressed via UAnimSingleNodeInstance::SetPlayRate; the FP camera drop/rise is a
+  smoothstep blend in Tick instead of an instant SetRelativeLocation. Movement input is
+  gated off while a transition runs (DoMove checks IsProneTransitionActive, a world-time
+  stamp set by both crouch handlers). Compiled clean; Tools/SetProneTransitionAnims.py run
+  headless set both BP slots (verified in the log). NOT yet feel-checked in PIE — that is
+  the resume point
 - Debug third-person view toggle built (2026-07-06): `DebugThirdPerson` exec command on
   BreakingWaveCharacter, spring-arm orbit camera (pawn-control-rotation), keybound to F6 via
   DebugExecBindings in DefaultInput.ini (UEnhancedInputComponent deletes BindKey, so config

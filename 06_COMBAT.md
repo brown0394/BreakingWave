@@ -12,7 +12,7 @@ No UI. The body tells you everything.
 
 ### Movement
 - **Running** — Default movement. Standing still means full exposure.
-- **Prone** — Drop to the ground instantly. Drastically reduces hit profile. Movement speed near-zero.
+- **Prone** — Drop to the ground instantly. Drastically reduces hit profile. No movement while prone (Decision 025): prone is a held position, not a stance to travel in — stand up to move.
 - **Slide into prone** — Going prone while running carries momentum into a sliding prone. Fast emergency dodge.
 - **Cover** — Press against cover near an object. Blocks hits from that direction.
 

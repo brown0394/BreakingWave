@@ -3,6 +3,7 @@
 #include "BreakingWaveCharacter.h"
 #include "Animation/AnimInstance.h"
 #include "Animation/AnimSequence.h"
+#include "Animation/AnimSingleNodeInstance.h"
 #include "Camera/CameraComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/SkeletalMeshComponent.h"
@@ -10,6 +11,7 @@
 #include "InputActionValue.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/SpringArmComponent.h"
+#include "TimerManager.h"
 #include "BreakingWave.h"
 
 ABreakingWaveCharacter::ABreakingWaveCharacter()
@@ -61,7 +63,7 @@ void ABreakingWaveCharacter::BeginPlay()
 	Super::BeginPlay();
 
 	GetCharacterMovement()->SetCrouchedHalfHeight(ProneCapsuleHalfHeight);
-	GetCharacterMovement()->MaxWalkSpeedCrouched = ProneSpeed;
+	GetCharacterMovement()->MaxWalkSpeedCrouched = 0.f;
 	StandingFirstPersonMeshRelativeLocation = FirstPersonMesh->GetRelativeLocation();
 	StandingBodyAnimClass = GetMesh()->GetAnimClass();
 }
@@ -124,12 +126,17 @@ void ABreakingWaveCharacter::DoAim(float Yaw, float Pitch)
 
 void ABreakingWaveCharacter::DoMove(float Right, float Forward)
 {
-	if (GetController())
+	if (GetController() && !IsProne() && !IsProneTransitionActive())
 	{
 		// pass the move inputs
 		AddMovementInput(GetActorRightVector(), Right);
 		AddMovementInput(GetActorForwardVector(), Forward);
 	}
+}
+
+bool ABreakingWaveCharacter::IsProneTransitionActive() const
+{
+	return GetWorld()->GetTimeSeconds() < ProneTransitionEndTime;
 }
 
 void ABreakingWaveCharacter::DoJumpStart()
@@ -158,10 +165,17 @@ void ABreakingWaveCharacter::OnStartCrouch(float HalfHeightAdjust, float ScaledH
 
 	const float GroundZ = GetActorLocation().Z - GetCapsuleComponent()->GetScaledCapsuleHalfHeight();
 	const float EyeDropToProne = FirstPersonCameraComponent->GetComponentLocation().Z - (GroundZ + ProneEyeHeight);
-	FirstPersonMesh->SetRelativeLocation(StandingFirstPersonMeshRelativeLocation - FVector(0.f, 0.f, EyeDropToProne));
+	StartEyeHeightBlend(FirstPersonMesh->GetRelativeLocation() - FVector(0.f, 0.f, EyeDropToProne), ProneDropDuration);
 	FirstPersonMesh->SetVisibility(false);
+	ProneTransitionEndTime = GetWorld()->GetTimeSeconds() + ProneDropDuration;
 
-	if (ProneBodyIdleAnim)
+	GetWorldTimerManager().ClearTimer(ProneBodyAnimTimer);
+	if (StandToProneAnim && ProneBodyIdleAnim)
+	{
+		PlayBodyAnimCompressed(StandToProneAnim, ProneDropDuration);
+		GetWorldTimerManager().SetTimer(ProneBodyAnimTimer, this, &ABreakingWaveCharacter::BeginProneBodyIdle, ProneDropDuration);
+	}
+	else if (ProneBodyIdleAnim)
 	{
 		GetMesh()->PlayAnimation(ProneBodyIdleAnim, true);
 	}
@@ -171,10 +185,71 @@ void ABreakingWaveCharacter::OnEndCrouch(float HalfHeightAdjust, float ScaledHal
 {
 	Super::OnEndCrouch(HalfHeightAdjust, ScaledHalfHeightAdjust);
 
-	FirstPersonMesh->SetRelativeLocation(StandingFirstPersonMeshRelativeLocation);
+	StartEyeHeightBlend(StandingFirstPersonMeshRelativeLocation, ProneStandUpDuration);
 	FirstPersonMesh->SetVisibility(true);
+	ProneTransitionEndTime = GetWorld()->GetTimeSeconds() + ProneStandUpDuration;
 
-	if (ProneBodyIdleAnim)
+	GetWorldTimerManager().ClearTimer(ProneBodyAnimTimer);
+	if (ProneToStandAnim)
+	{
+		PlayBodyAnimCompressed(ProneToStandAnim, ProneStandUpDuration);
+		GetWorldTimerManager().SetTimer(ProneBodyAnimTimer, this, &ABreakingWaveCharacter::RestoreStandingBodyAnim, ProneStandUpDuration);
+	}
+	else if (ProneBodyIdleAnim)
+	{
+		RestoreStandingBodyAnim();
+	}
+}
+
+void ABreakingWaveCharacter::Tick(float DeltaSeconds)
+{
+	Super::Tick(DeltaSeconds);
+
+	if (bEyeHeightBlendActive)
+	{
+		EyeHeightBlendElapsed += DeltaSeconds;
+		const float Alpha = FMath::Clamp(EyeHeightBlendElapsed / EyeHeightBlendDuration, 0.f, 1.f);
+		FirstPersonMesh->SetRelativeLocation(FMath::Lerp(EyeHeightBlendStart, EyeHeightBlendTarget, FMath::SmoothStep(0.f, 1.f, Alpha)));
+		bEyeHeightBlendActive = Alpha < 1.f;
+	}
+}
+
+void ABreakingWaveCharacter::StartEyeHeightBlend(const FVector& TargetRelativeLocation, float Duration)
+{
+	if (Duration <= 0.f)
+	{
+		bEyeHeightBlendActive = false;
+		FirstPersonMesh->SetRelativeLocation(TargetRelativeLocation);
+		return;
+	}
+
+	EyeHeightBlendStart = FirstPersonMesh->GetRelativeLocation();
+	EyeHeightBlendTarget = TargetRelativeLocation;
+	EyeHeightBlendElapsed = 0.f;
+	EyeHeightBlendDuration = Duration;
+	bEyeHeightBlendActive = true;
+}
+
+void ABreakingWaveCharacter::PlayBodyAnimCompressed(UAnimSequence* Anim, float Duration)
+{
+	GetMesh()->PlayAnimation(Anim, false);
+	if (UAnimSingleNodeInstance* SingleNode = GetMesh()->GetSingleNodeInstance())
+	{
+		SingleNode->SetPlayRate(Anim->GetPlayLength() / FMath::Max(Duration, 0.01f));
+	}
+}
+
+void ABreakingWaveCharacter::BeginProneBodyIdle()
+{
+	if (IsProne() && ProneBodyIdleAnim)
+	{
+		GetMesh()->PlayAnimation(ProneBodyIdleAnim, true);
+	}
+}
+
+void ABreakingWaveCharacter::RestoreStandingBodyAnim()
+{
+	if (!IsProne())
 	{
 		GetMesh()->SetAnimInstanceClass(StandingBodyAnimClass);
 	}
