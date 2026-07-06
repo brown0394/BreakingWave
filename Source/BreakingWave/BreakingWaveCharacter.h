@@ -10,6 +10,7 @@
 class UInputComponent;
 class USkeletalMeshComponent;
 class UCameraComponent;
+class USpringArmComponent;
 class UInputAction;
 class UAnimSequence;
 struct FInputActionValue;
@@ -31,6 +32,14 @@ class ABreakingWaveCharacter : public ACharacter
 	/** First person camera */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components", meta = (AllowPrivateAccess = "true"))
 	UCameraComponent* FirstPersonCameraComponent;
+
+	/** Debug-only orbit arm for eyeballing body animations in PIE; the game itself is first-person only */
+	UPROPERTY(VisibleAnywhere, Category="Debug", meta = (AllowPrivateAccess = "true"))
+	USpringArmComponent* DebugThirdPersonSpringArm;
+
+	/** Debug-only camera on the orbit arm, activated by the DebugThirdPerson console command */
+	UPROPERTY(VisibleAnywhere, Category="Debug", meta = (AllowPrivateAccess = "true"))
+	UCameraComponent* DebugThirdPersonCamera;
 
 protected:
 
@@ -113,6 +122,10 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Movement")
 	float ProneEyeHeight = 30.f;
 
+	/** Orbit distance of the debug third person camera */
+	UPROPERTY(EditAnywhere, Category="Debug")
+	float DebugThirdPersonDistance = 400.f;
+
 	/** Looping full-body pose the world-space mesh plays while prone (body/shadow only; the ABP takes over again on stand-up) */
 	UPROPERTY(EditAnywhere, Category="Animation")
 	UAnimSequence* ProneBodyIdleAnim;
@@ -134,7 +147,13 @@ private:
 
 	TSubclassOf<UAnimInstance> StandingBodyAnimClass;
 
+	bool bDebugThirdPersonViewActive = false;
+
 public:
+
+	/** Console command: toggles the debug third person view (shows the world-space body mesh, hides the FP arms) */
+	UFUNCTION(Exec)
+	void DebugThirdPerson();
 
 	/** Prone is implemented on the engine crouch machinery; crouched means prone */
 	bool IsProne() const { return bIsCrouched; }

@@ -23,7 +23,8 @@
       "PowerShell(& \"C:\\\\Program Files\\\\Epic Games\\\\UE_5.6\\\\Engine\\\\Binaries\\\\Win64\\\\UnrealEditor-Cmd.exe\" \"C:\\\\Users\\\\user\\\\Documents\\\\Unreal Projects\\\\BreakingWave\\\\BreakingWave.uproject\" -run=pythonscript -script=\"C:\\\\Users\\\\user\\\\Documents\\\\Unreal Projects\\\\BreakingWave\\\\Tools\\\\RetargetProneAnims.py\" -stdout -unattended -nosplash | Select-String -Pattern \"LogPython: Warning|LogPython: Error|LogPythonScriptCommandlet\" | Select-Object -First 30; \"EXIT=$LASTEXITCODE\")",
       "PowerShell(& \"C:\\\\Program Files\\\\Epic Games\\\\UE_5.6\\\\Engine\\\\Binaries\\\\Win64\\\\UnrealEditor-Cmd.exe\" \"C:\\\\Users\\\\user\\\\Documents\\\\Unreal Projects\\\\BreakingWave\\\\BreakingWave.uproject\" -run=pythonscript -script=\"C:\\\\Users\\\\user\\\\Documents\\\\Unreal Projects\\\\BreakingWave\\\\Tools\\\\RetargetProneAnims.py\" -stdout -unattended -nosplash | Select-String -Pattern \"LogPython: Warning: \\(saved|VERIFY|SUMMARY|set BP|retargeted|already\\)|LogPython: Error\" | Select-Object -First 30; \"EXIT=$LASTEXITCODE\")",
       "PowerShell(& \"C:\\\\Program Files\\\\Epic Games\\\\UE_5.6\\\\Engine\\\\Binaries\\\\Win64\\\\UnrealEditor-Cmd.exe\" \"C:\\\\Users\\\\user\\\\Documents\\\\Unreal Projects\\\\BreakingWave\\\\BreakingWave.uproject\" -run=pythonscript -script=\"C:\\\\Users\\\\user\\\\Documents\\\\Unreal Projects\\\\BreakingWave\\\\Tools\\\\RetargetProneAnims.py\" -stdout -unattended -nosplash > \"$env:TEMP\\\\retarget_run.log\" 2>$null; \"EXIT=$LASTEXITCODE\"; \\(Get-Content \"$env:TEMP\\\\retarget_run.log\" | Measure-Object -Line\\).Lines)",
-      "PowerShell(Select-String *)"
+      "PowerShell(Select-String *)",
+      "PowerShell(& \"C:\\\\Program Files\\\\Epic Games\\\\UE_5.6\\\\Engine\\\\Build\\\\BatchFiles\\\\Build.bat\" BreakingWaveEditor Win64 Development -project=\"C:\\\\Users\\\\user\\\\Documents\\\\Unreal Projects\\\\BreakingWave\\\\BreakingWave.uproject\" -WaitMutex)"
     ]
   }
 }

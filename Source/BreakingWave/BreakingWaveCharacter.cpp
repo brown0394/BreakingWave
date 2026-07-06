@@ -9,6 +9,7 @@
 #include "EnhancedInputComponent.h"
 #include "InputActionValue.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "GameFramework/SpringArmComponent.h"
 #include "BreakingWave.h"
 
 ABreakingWaveCharacter::ABreakingWaveCharacter()
@@ -33,6 +34,14 @@ ABreakingWaveCharacter::ABreakingWaveCharacter()
 	FirstPersonCameraComponent->bEnableFirstPersonScale = true;
 	FirstPersonCameraComponent->FirstPersonFieldOfView = 70.0f;
 	FirstPersonCameraComponent->FirstPersonScale = 0.6f;
+
+	DebugThirdPersonSpringArm = CreateDefaultSubobject<USpringArmComponent>(TEXT("Debug Third Person Spring Arm"));
+	DebugThirdPersonSpringArm->SetupAttachment(GetCapsuleComponent());
+	DebugThirdPersonSpringArm->bUsePawnControlRotation = true;
+
+	DebugThirdPersonCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("Debug Third Person Camera"));
+	DebugThirdPersonCamera->SetupAttachment(DebugThirdPersonSpringArm, USpringArmComponent::SocketName);
+	DebugThirdPersonCamera->SetAutoActivate(false);
 
 	// configure the character comps
 	GetMesh()->SetOwnerNoSee(true);
@@ -169,6 +178,21 @@ void ABreakingWaveCharacter::OnEndCrouch(float HalfHeightAdjust, float ScaledHal
 	{
 		GetMesh()->SetAnimInstanceClass(StandingBodyAnimClass);
 	}
+}
+
+void ABreakingWaveCharacter::DebugThirdPerson()
+{
+	bDebugThirdPersonViewActive = !bDebugThirdPersonViewActive;
+
+	DebugThirdPersonSpringArm->TargetArmLength = DebugThirdPersonDistance;
+	DebugThirdPersonCamera->SetActive(bDebugThirdPersonViewActive);
+	FirstPersonCameraComponent->SetActive(!bDebugThirdPersonViewActive);
+
+	GetMesh()->SetFirstPersonPrimitiveType(bDebugThirdPersonViewActive
+		? EFirstPersonPrimitiveType::None
+		: EFirstPersonPrimitiveType::WorldSpaceRepresentation);
+	GetMesh()->SetOwnerNoSee(!bDebugThirdPersonViewActive);
+	FirstPersonMesh->SetOwnerNoSee(bDebugThirdPersonViewActive);
 }
 
 void ABreakingWaveCharacter::DoSprintStart()

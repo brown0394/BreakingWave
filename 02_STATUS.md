@@ -1,8 +1,8 @@
 # Current Status
 
-> Last updated: 2026-07-05
+> Last updated: 2026-07-06
 
-## Phase: Step 2 — First-Person Movement (prone done, slide + headbob remain)
+## Phase: Step 2 — First-Person Movement (prone + F6 debug view done; prone feel-check, slide, headbob remain)
 
 All grey-box geometry is placed. Fog and the zone-size walkthrough are DEFERRED until after
 more system work (user decision 2026-07-04) — pick them up before tuning zone sizes.
@@ -11,7 +11,7 @@ more system work (user decision 2026-07-04) — pick them up before tuning zone 
 
 ### Documents
 - [x] Project mental model (01_SOUL.md)
-- [x] Decision log (03_DECISIONS.md) — 22 entries
+- [x] Decision log (03_DECISIONS.md) — 24 entries
 - [x] Design principles (04_PRINCIPLES.md) — 7 principles
 - [x] Beach map v2 (05_ZONES.md) — 5 zones, 3 bunkers, 3 infantry positions, comm trenches
 - [x] Combat system design (06_COMBAT.md) — controls, damage, cover, per-zone rhythm
@@ -36,6 +36,16 @@ more system work (user decision 2026-07-04) — pick them up before tuning zone 
   crawling) and arms invisible while prone — both fine until the shooting/visual pass.
   Prone_Fire/Reload/Death/transition anims are retargeted and waiting in
   Content/AnimStarterPack/Retarget/ for later systems
+- [x] Debug third-person view (2026-07-06, Decision 024): **F6** in PIE (DebugExecBindings in
+  Config/DefaultInput.ini — dev-builds only, ignored in Shipping) or `DebugThirdPerson` in the
+  console toggles a spring-arm orbit camera, un-hides the world-space body mesh, hides the FP
+  arms. Note: Enhanced Input's component DELETES BindKey, so debug keys can't be bound in C++ —
+  DebugExecBindings is the engine-sanctioned route (engine's own F1–F5 viewmode keys use it;
+  F5 was taken, hence F6).
+  Gotcha encoded in the code: the renderer FORCES bOwnerNoSee=true on any
+  FirstPersonPrimitiveType::WorldSpaceRepresentation proxy, so the toggle must also swap the
+  body mesh's primitive type to None and back (SetFirstPersonPrimitiveType). Debug-only —
+  the game stays first-person only. Tunable: DebugThirdPersonDistance (400)
 - [x] BreakingWaveCameraManager — pitch-limited camera manager stub
 - [x] BreakingWaveGameMode / PlayerController — base classes
 
@@ -58,15 +68,11 @@ more system work (user decision 2026-07-04) — pick them up before tuning zone 
 
 - [ ] **RESUME HERE — Step 2 continues** (read 04_PRINCIPLES.md + 07_CAMERA.md headbob
   section first):
-  1. Debug third-person view toggle (debug-only, e.g. console command or spare key): pull the
-     camera back/out so the world-space body mesh is visible in PIE — needed to verify the
-     prone anim and every future body animation without squinting at shadows. Temporarily
-     un-hide the body mesh (`SetOwnerNoSee(false)`) while active. Not a game feature; the
-     game is first-person only
-  2. Feel-check prone + lying animation/shadow in editor (LeftControl; restart editor first —
-     BP and anim assets were saved outside the last session)
-  3. Slide-into-prone (momentum slide while sprinting)
-  4. Headbob (primarily vertical bounce, small amplitude)
+  1. Feel-check prone + lying animation in editor: PIE, LeftControl to go prone, press F6
+     to see the body mesh (F6 again to return to first person). Restart the editor first —
+     BP and anim assets were saved outside an earlier session
+  2. Slide-into-prone (momentum slide while sprinting)
+  3. Headbob (primarily vertical bounce, small amplitude)
 - [ ] **Step 2**: Run through each zone and record transit times in 05_ZONES.md
 - [ ] Editor cleanup while in the BP anyway: delete BP_FirstPersonCharacter's touch-UI jump
   nodes, then delete the DoJumpStart/DoJumpEnd shims in BreakingWaveCharacter
@@ -89,6 +95,16 @@ so world = profile-meters × 100 − 50400 on both axes. Profile coords below wi
 
 ## What Was Done (since last update)
 
+- Debug third-person view toggle built (2026-07-06): `DebugThirdPerson` exec command on
+  BreakingWaveCharacter, spring-arm orbit camera (pawn-control-rotation), keybound to F6 via
+  DebugExecBindings in DefaultInput.ini (UEnhancedInputComponent deletes BindKey, so config
+  is the only clean debug-key route; F5 already = engine shadercomplexity). Compiled clean.
+  Engine finding worth remembering: FPrimitiveSceneProxy force-sets bOwnerNoSee=true for
+  WorldSpaceRepresentation primitives (PrimitiveSceneProxy.cpp ~line 746), so un-hiding the
+  body requires SetFirstPersonPrimitiveType(None) too, not just SetOwnerNoSee(false).
+  NOT yet feel-checked in PIE — that is the resume point
+
+### Earlier (2026-07-05)
 - Session ended 2026-07-05 after wiring the prone body animation; the retargeted anim/shadow
   has NOT been eyeballed in-game yet. Agreed next action: build a debug third-person view
   toggle first (see RESUME HERE), then feel-check prone with it
