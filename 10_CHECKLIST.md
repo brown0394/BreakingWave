@@ -32,8 +32,9 @@ Legend: `[x]` done · `[~]` partially done · `[ ]` not started.
 
 - [x] Create player character C++ class
 - [x] Implement running
-- [x] Implement prone (instant drop to ground) — LeftControl toggle, feel-check in editor pending
-- [ ] Debug third-person view toggle (dev tool, not a feature) — to verify prone/body animations in PIE
+- [x] Implement prone (instant drop to ground) — LeftControl toggle, stationary (Decision 025), transitions feel-checked 2026-07-08
+- [x] Debug third-person view toggle (dev tool, not a feature) — F6, verified 2026-07-08
+- [~] Sprint body animation reads as running — sprint row added to BS_Idle_Walk_Run via Tools/AddSprintToLocomotion.py (2026-07-08), feel-check pending
 - [ ] Implement slide-into-prone (momentum slide)
 - [ ] Implement headbob (primarily vertical bounce, small amplitude)
 - [ ] Run through each zone yourself and measure time

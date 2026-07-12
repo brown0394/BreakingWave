@@ -1,8 +1,8 @@
 # Current Status
 
-> Last updated: 2026-07-06
+> Last updated: 2026-07-12
 
-## Phase: Step 2 — First-Person Movement (prone + transitions + F6 debug view done; slide, headbob remain)
+## Phase: Step 2 — First-Person Movement (prone + transitions + F6 debug view done and feel-checked; slide, headbob remain)
 
 All grey-box geometry is placed. Fog and the zone-size walkthrough are DEFERRED until after
 more system work (user decision 2026-07-04) — pick them up before tuning zone sizes.
@@ -68,6 +68,10 @@ more system work (user decision 2026-07-04) — pick them up before tuning zone 
 - [x] Tools/AddProneInput.py — creates IA_Prone, maps LeftControl in IMC_Default, sets the BP's ProneAction slot; idempotent; edit PRONE_KEY_NAME and re-run to change the key (already run, works headless)
 - [x] Tools/RetargetProneAnims.py — builds IK rigs + UE4→UE5 retargeter (auto chains/mapping/alignment), retargets all 8 AnimStarterPack prone anims to Content/AnimStarterPack/Retarget/*_UE5, sets the BP's ProneBodyIdleAnim; idempotent (already run). NOTE: needs full editor, not commandlet — run in-editor or via `-ExecutePythonScript` (the batch op touches Slate)
 - [x] Tools/SetProneTransitionAnims.py — sets the BP's StandToProneAnim/ProneToStandAnim slots to the retargeted transition anims; idempotent, works headless via `-run=pythonscript` (already run)
+- [x] Tools/AddSprintToLocomotion.py — SUPERSEDED by RebuildLocomotionAsRifle.py (kept for history; its 900-row is rewritten by the newer tool)
+- [x] Tools/RebuildLocomotionAsRifle.py — retargets AnimStarterPack's rifle locomotion set (Idle_Rifle_Hip + 4 Jog_*_Rifle) UE4→UE5 and rebuilds ALL of BS_Idle_Walk_Run as rifle-carry with foot-true rate scales (measured authored speeds: jogs ~285 cm/s, sprint ~617 cm/s — constants in the tool); idempotent (rows rebuilt from tables each run); needs `-ExecutePythonScript` full-editor mode (already run, disk-verified). Triangulation rebuild now goes through UBlendSpaceTool (see below) — the old Persona open/save route crashes offscreen
+- [x] Tools/BakeIKBonesFromFK.py — bakes FK bone transforms onto the ik_* helper bones (ik_foot_l/r, ik_hand_gun/l/r) in every /Game/AnimStarterPack/Retarget anim; MUST run after any new retarget (neither ASP sources nor the retargeter animate ik bones, and ABP_Unarmed's CR_Mannequin_FootIK pins the legs to ik_foot_l/r — the "legs not moving" bug). Idempotent, runs headless via `-run=pythonscript` (already run on all 14 retargeted anims, disk-verified: ik_foot spans now match FK feet)
+- [x] Source/BreakingWave/BlendSpaceTool.* — editor-only C++ UFUNCTION library for headless tools: RebuildRuntimeTriangulation (the only non-Persona way to rebuild a blendspace's serialized triangulation), DescribeRuntimeTriangulation, DescribeBlendOutputAt (evaluates the blendspace exactly like the runtime — use to verify sample layouts without PIE)
 
 ### Level
 - [x] Beach heightmap imported at scale 100/100/200 (Decision 022) — zone-profiled terrain with tactical relief (dunes, berm, wavy bluff) confirmed looking right in editor
@@ -81,11 +85,17 @@ more system work (user decision 2026-07-04) — pick them up before tuning zone 
 
 - [ ] **RESUME HERE — Step 2 continues** (read 04_PRINCIPLES.md + 07_CAMERA.md headbob
   section first):
-  1. Feel-check the prone TRANSITIONS: restart the editor (BP + C++ changed outside the
-     session), PIE, LeftControl down/up — camera should dive fast (0.35 s) and rise slow
-     (0.9 s); F6 to watch the body play the transition anims. WASD should do nothing while
-     prone (Decision 025). Tune the durations on BP_FirstPersonCharacter if the drop reads
-     too slow for an emergency dive
+  1. RE-feel-check the all-rifle locomotion (restart the editor first — assets changed
+     outside the session AGAIN on 2026-07-12: frozen-legs bug fixed, see What Was Done):
+     PIE + F6. W (600) should read as a proper rifle-carry run with feet matching the
+     ground (sprint anim at ~0.97); Shift+W (900) same anim at ~1.46; standing idle
+     holds the rifle. Watch for: strafe/backpedal cadence — jogs are rate-scaled
+     foot-true (2.1× at 600, 3.2× at 900) which may read frantic; if so, lower those
+     rates in RebuildLocomotionAsRifle.py (accepting foot slide) and re-run. Diagonals
+     are triangulated between fwd and side samples (ASP has only 4 directions) — flag
+     if they read wrong. NOTE: standing idle comes from the ABP's separate Idle state
+     (MM_Idle, unarmed) — the blendspace rifle idle only shows while moving slowly;
+     making the standing idle carry the rifle means editing ABP_Unarmed's Idle state
   2. Slide-into-prone (momentum slide while sprinting)
   3. Headbob (primarily vertical bounce, small amplitude)
 - [ ] **Step 2**: Run through each zone and record transit times in 05_ZONES.md
@@ -110,6 +120,77 @@ so world = profile-meters × 100 − 50400 on both axes. Profile coords below wi
 
 ## What Was Done (since last update)
 
+- FIXED "legs not moving while walking/running" (2026-07-12): user's feel-check of the
+  all-rifle locomotion failed — body played the anim but the legs stayed planted. Root
+  cause chain, each link verified headless: (1) the blendspace was HEALTHY — 24 samples,
+  valid triangulation, and a new C++ probe (UBlendSpaceTool::DescribeBlendOutputAt,
+  calling the same GetSamplesFromBlendInput the runtime uses) returned the correct
+  anims/weights at every speed; (2) the retargeted anims' FK legs move fine (foot travel
+  28–49 cm); (3) BUT their ik_foot_l/r helper bones were frozen at the reference pose —
+  neither AnimStarterPack's UE4 sources nor the IK retargeter animate ik_* bones, while
+  every Epic anim keeps them glued to the FK feet; (4) ABP_Unarmed ends in the
+  CR_Mannequin_FootIK control rig whose FootTrace items are ik_foot_l/r, so the rig
+  pinned both legs to two fixed points while everything else animated. Prone anims never
+  showed this because single-node playback bypasses the ABP and its rig. Fix:
+  Tools/BakeIKBonesFromFK.py bakes FK→ik transforms (feet + hands, Epic convention) into
+  all 14 retargeted anims — disk-verified, ik_foot now tracks foot exactly. Feel-check
+  pending (restart the editor first).
+  Also found while diagnosing: the Persona open/save/close trick for rebuilding
+  blendspace triangulation CRASHES the offscreen editor in UE 5.6 (Slate paint crash in
+  AnimationEditor.dll two frames after open) — it cannot be trusted headless. Replaced
+  with Source/BreakingWave/BlendSpaceTool.* exposing UBlendSpace::ResampleData() to
+  Python; RebuildLocomotionAsRifle.py now uses it. The 07-11 triangulation had actually
+  been saved correctly (28 triangles, max sample index 23 — verified), so triangulation
+  was NOT the cause this time; the ik bones were.
+- Locomotion rebuilt as all-rifle-carry (2026-07-11): user flagged two problems with the
+  sprint pass — legs slid/broke at sprint, and only sprint carried the rifle while
+  walk/jog stayed unarmed. Root cause of the legs: AnimStarterPack anims were authored
+  for a 270-speed character (its BS_Jog axis and Ue4ASP_Character MaxWalkSpeed both say
+  270), so Sprint_Fwd_Rifle at rate 1.0 under our 900 ground speed moved the feet at
+  ~2/3 ground speed. Authored speeds were MEASURED from the anims themselves (planted-
+  foot velocity relative to root, validated within 5% against the UE5 anims' known root
+  motion): jogs ~285 cm/s, sprint ~617 cm/s. Tools/RebuildLocomotionAsRifle.py retargets
+  Idle_Rifle_Hip + 4 Jog_*_Rifle and replaces every BS_Idle_Walk_Run row: idle = rifle
+  idle; 300 = rifle jogs at ~1.05 (their natural pace); 600 fwd = rifle SPRINT at ~0.97
+  (near-perfect foot match — our normal move speed is genuinely a run); 900 fwd = same
+  at ~1.46; non-forward directions = jogs rate-scaled foot-true (2.1×/3.2× — tentative,
+  may read frantic; the tradeoff is rate vs foot slide, tune in the tool's constants).
+  ASP has no hip-carry walk anims (Walk_*_Rifle are all Ironsights/aiming), hence jogs
+  everywhere. Disk-verified from a fresh process: 24 samples, all rifle, correct rates.
+  Persona resample done. Feel-check pending. Note: if the standing idle still shows the
+  unarmed pose in PIE, the ABP has a separate idle state outside the blendspace — flag it
+- Sprint body animation wired (2026-07-08): user flagged that Shift-sprint (RunSpeed 900)
+  left the body jogging in place — BS_Idle_Walk_Run's speed axis topped out at 600 (the jog
+  row, which is also our WalkSpeed), so sprint clamped there and the feet slid at 1.5×.
+  Tools/AddSprintToLocomotion.py retargeted AnimStarterPack's Sprint_Fwd_Rifle to the UE5
+  mannequin and added a 900-speed row to the blendspace (fwd = sprint anim; other
+  directions = jog anims with per-sample rate_scale 1.5 so feet keep up). Verified in the
+  reloaded asset (axis max 900, 9 samples, fwd sprint in place). NOT yet feel-checked in
+  PIE. UE5.6 gotcha for the record: BlendSpace sample_data AND blend_parameters are
+  writable from Python (blend_parameters despite being a fixed C array), and BlendSample
+  has a per-sample rate_scale — blendspaces can be extended headless without touching
+  the ABP. Sprint anim carries a rifle pose next to unarmed walk/jog — fine for greybox,
+  and everything becomes rifle anims later anyway.
+  TWO FEEL-CHECKS FAILED (2026-07-08, "no difference between W and Shift+W") — real root
+  cause found on the second: a ZOMBIE headless UnrealEditor-Cmd (leftover from an earlier
+  probe run) held BS_Idle_Walk_Run.uasset, so the tool's original save silently FAILED
+  with sharing-violation Error Code 32 (SavePackage retries MoveFile ~10x then gives up;
+  the Python save_asset return was unchecked) — the same zombie also broke the C++ build
+  with LNK1104 until killed. Both feel-checks ran against the untouched template asset.
+  In-session "verify" was worthless: unreal.load_asset returns the in-memory object, so
+  verification of a save must happen in a SEPARATE process. Second (theoretical, also
+  fixed) trap: editing sample_data doesn't rebuild the blendspace's serialized runtime
+  triangulation — only UBlendSpace::ResampleData() does, whose only caller is the Persona
+  editor (fires on construction), so the tool opens the asset in Persona + force-saves +
+  closes (works under -ExecutePythonScript -RenderOffscreen). Tool re-run 2026-07-08
+  with no editor running: DISK-VERIFIED from a fresh process — axis 0–900 grid 3,
+  36 samples (900 row: fwd sprint + 8 rate-scaled jogs), tool now bails loudly on save
+  failure. Related finding: ABP_FP_Copy (first-person view) has NO anim dependencies —
+  it copy-poses from the body mesh + CtrlRig_FPWarp, so body anim fixes show up in first
+  person automatically. Feel-check pending (third attempt)
+- Feel-check PASSED (2026-07-08): prone transitions (fast dive / slow rise, no camera
+  teleport, WASD dead while prone and mid-transition) and the F6 debug third-person view
+  all confirmed good in PIE by the user. Durations kept at 0.35 s / 0.9 s
 - Prone made stationary, crawl sway reverted (2026-07-06, Decision 025): a procedural crawl
   placeholder (speed-scaled idle play rate + yaw/roll sway) was built earlier the same day —
   user feel-checked it and rejected it; moving while prone itself was cut. DoMove now ignores
