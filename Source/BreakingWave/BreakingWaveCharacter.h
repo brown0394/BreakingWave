@@ -127,17 +127,21 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Movement")
 	float ProneStandUpDuration = 0.9f;
 
-	/** Ground deceleration while momentum from going prone at speed bleeds off (slide-into-prone, 06_COMBAT.md) */
+	/** Ground deceleration after a dive lands (slide-into-prone, 06_COMBAT.md); high = short impact skid, not a long glide */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Movement")
-	float SlideDeceleration = 900.f;
+	float SlideDeceleration = 2500.f;
 
 	/** Speed below which a slide settles into the stationary prone */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Movement")
 	float SlideSettleSpeed = 60.f;
 
-	/** Upward pop applied on prone entry at speed, turning the drop into a ballistic dive (~0.37 s airtime at 180; 0 = flat slide) */
+	/** Upward pop applied on prone entry at speed, turning the drop into a ballistic dive (~0.6 s airtime, ~46 cm rise at 300; 0 = flat slide) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Movement")
-	float ProneDiveUpwardSpeed = 180.f;
+	float ProneDiveUpwardSpeed = 300.f;
+
+	/** Gravity multiplier past the dive's apex — the rise keeps its pop, the fall snaps down (1 = symmetric arc) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Movement")
+	float ProneDiveFallGravityScale = 2.f;
 
 	/** Orbit distance of the debug third person camera */
 	UPROPERTY(EditAnywhere, Category="Debug")
@@ -165,12 +169,20 @@ protected:
 
 	virtual void OnEndCrouch(float HalfHeightAdjust, float ScaledHalfHeightAdjust) override;
 
+	virtual void Landed(const FHitResult& Hit) override;
+
 	/** Set up input action bindings */
 	virtual void SetupPlayerInputComponent(UInputComponent* InputComponent) override;
 
 private:
 
 	void StartEyeHeightBlend(const FVector& TargetRelativeLocation, float Duration);
+
+	void StartEyeDropToProne();
+
+	float PredictDiveFlightTime() const;
+
+	void RestoreDiveFallGravity();
 
 	void PlayBodyAnimCompressed(UAnimSequence* Anim, float Duration);
 
@@ -203,6 +215,12 @@ private:
 	FTimerHandle ProneBodyAnimTimer;
 
 	bool bSlideActive = false;
+
+	bool bDiveEyeDropPending = false;
+
+	bool bDiveFallGravityActive = false;
+
+	float PreDiveGravityScale = 1.f;
 
 	bool bPreSlideUseSeparateBrakingFriction = false;
 

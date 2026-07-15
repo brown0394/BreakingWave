@@ -163,18 +163,22 @@ void ABreakingWaveCharacter::OnStartCrouch(float HalfHeightAdjust, float ScaledH
 {
 	Super::OnStartCrouch(HalfHeightAdjust, ScaledHalfHeightAdjust);
 
-	const float GroundZ = GetActorLocation().Z - GetCapsuleComponent()->GetScaledCapsuleHalfHeight();
-	const float EyeDropToProne = FirstPersonCameraComponent->GetComponentLocation().Z - (GroundZ + ProneEyeHeight);
-	StartEyeHeightBlend(FirstPersonMesh->GetRelativeLocation() - FVector(0.f, 0.f, EyeDropToProne), ProneDropDuration);
-	FirstPersonMesh->SetVisibility(false);
-	ProneTransitionEndTime = GetWorld()->GetTimeSeconds() + ProneDropDuration;
 	BeginSlideFromMomentum();
+	FirstPersonMesh->SetVisibility(false);
+
+	const float DropDuration = (bDiveEyeDropPending ? PredictDiveFlightTime() : 0.f) + ProneDropDuration;
+
+	if (!bDiveEyeDropPending)
+	{
+		StartEyeDropToProne();
+	}
+	ProneTransitionEndTime = GetWorld()->GetTimeSeconds() + DropDuration;
 
 	GetWorldTimerManager().ClearTimer(ProneBodyAnimTimer);
 	if (StandToProneAnim && ProneBodyIdleAnim)
 	{
-		PlayBodyAnimCompressed(StandToProneAnim, ProneDropDuration);
-		GetWorldTimerManager().SetTimer(ProneBodyAnimTimer, this, &ABreakingWaveCharacter::BeginProneBodyIdle, ProneDropDuration);
+		PlayBodyAnimCompressed(StandToProneAnim, DropDuration);
+		GetWorldTimerManager().SetTimer(ProneBodyAnimTimer, this, &ABreakingWaveCharacter::BeginProneBodyIdle, DropDuration);
 	}
 	else if (ProneBodyIdleAnim)
 	{
@@ -186,6 +190,8 @@ void ABreakingWaveCharacter::OnEndCrouch(float HalfHeightAdjust, float ScaledHal
 {
 	Super::OnEndCrouch(HalfHeightAdjust, ScaledHalfHeightAdjust);
 
+	bDiveEyeDropPending = false;
+	RestoreDiveFallGravity();
 	SettleSlide();
 	StartEyeHeightBlend(StandingFirstPersonMeshRelativeLocation, ProneStandUpDuration);
 	FirstPersonMesh->SetVisibility(true);
@@ -212,6 +218,14 @@ void ABreakingWaveCharacter::Tick(float DeltaSeconds)
 		SettleSlide();
 	}
 
+	if (bDiveEyeDropPending && !bDiveFallGravityActive
+		&& GetCharacterMovement()->IsFalling() && GetCharacterMovement()->Velocity.Z <= 0.f)
+	{
+		PreDiveGravityScale = GetCharacterMovement()->GravityScale;
+		GetCharacterMovement()->GravityScale = PreDiveGravityScale * ProneDiveFallGravityScale;
+		bDiveFallGravityActive = true;
+	}
+
 	if (bEyeHeightBlendActive)
 	{
 		EyeHeightBlendElapsed += DeltaSeconds;
@@ -219,6 +233,43 @@ void ABreakingWaveCharacter::Tick(float DeltaSeconds)
 		FirstPersonMesh->SetRelativeLocation(FMath::Lerp(EyeHeightBlendStart, EyeHeightBlendTarget, FMath::SmoothStep(0.f, 1.f, Alpha)));
 		bEyeHeightBlendActive = Alpha < 1.f;
 	}
+}
+
+void ABreakingWaveCharacter::Landed(const FHitResult& Hit)
+{
+	Super::Landed(Hit);
+
+	RestoreDiveFallGravity();
+	if (bDiveEyeDropPending)
+	{
+		bDiveEyeDropPending = false;
+		StartEyeDropToProne();
+		ProneTransitionEndTime = GetWorld()->GetTimeSeconds() + ProneDropDuration;
+	}
+}
+
+float ABreakingWaveCharacter::PredictDiveFlightTime() const
+{
+	const float Gravity = FMath::Abs(GetCharacterMovement()->GetGravityZ());
+	const float RiseTime = ProneDiveUpwardSpeed / Gravity;
+	const float FallTime = RiseTime / FMath::Sqrt(FMath::Max(ProneDiveFallGravityScale, 0.1f));
+	return RiseTime + FallTime;
+}
+
+void ABreakingWaveCharacter::RestoreDiveFallGravity()
+{
+	if (bDiveFallGravityActive)
+	{
+		GetCharacterMovement()->GravityScale = PreDiveGravityScale;
+		bDiveFallGravityActive = false;
+	}
+}
+
+void ABreakingWaveCharacter::StartEyeDropToProne()
+{
+	const float GroundZ = GetActorLocation().Z - GetCapsuleComponent()->GetScaledCapsuleHalfHeight();
+	const float EyeDropToProne = FirstPersonCameraComponent->GetComponentLocation().Z - (GroundZ + ProneEyeHeight);
+	StartEyeHeightBlend(FirstPersonMesh->GetRelativeLocation() - FVector(0.f, 0.f, EyeDropToProne), ProneDropDuration);
 }
 
 void ABreakingWaveCharacter::StartEyeHeightBlend(const FVector& TargetRelativeLocation, float Duration)
@@ -284,6 +335,7 @@ void ABreakingWaveCharacter::BeginSlideFromMomentum()
 	if (ProneDiveUpwardSpeed > 0.f && Movement->IsMovingOnGround())
 	{
 		LaunchCharacter(FVector(0.f, 0.f, ProneDiveUpwardSpeed), false, true);
+		bDiveEyeDropPending = true;
 	}
 }
 

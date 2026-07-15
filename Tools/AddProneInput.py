@@ -18,7 +18,7 @@ TEMPLATE_ACTION_PATH = ACTIONS_DIR + "/IA_Sprint"
 MAPPING_CONTEXT_PATH = "/Game/Input/IMC_Default"
 CHARACTER_BP_PATH = "/Game/FirstPerson/Blueprints/BP_FirstPersonCharacter"
 CHARACTER_CLASS_PATH = CHARACTER_BP_PATH + ".BP_FirstPersonCharacter_C"
-PRONE_KEY_NAME = "LeftControl"
+PRONE_KEY_NAME = "C"
 
 
 def ensure_prone_action():
@@ -60,8 +60,9 @@ def ensure_key_mapping(prone_action):
     mapping.set_editor_property("key", key)
     kept.append(mapping)
     context.set_editor_property("mappings", kept)
-    unreal.EditorAssetLibrary.save_asset(MAPPING_CONTEXT_PATH, only_if_is_dirty=False)
-    unreal.log("mapped %s -> IA_Prone in IMC_Default" % PRONE_KEY_NAME)
+    if not unreal.EditorAssetLibrary.save_asset(MAPPING_CONTEXT_PATH, only_if_is_dirty=False):
+        raise RuntimeError("save_asset FAILED for %s — check for zombie UnrealEditor processes holding the file" % MAPPING_CONTEXT_PATH)
+    unreal.log_warning("mapped %s -> IA_Prone in IMC_Default" % PRONE_KEY_NAME)
 
 
 def ensure_character_prone_slot(prone_action):

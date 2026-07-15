@@ -24,7 +24,8 @@ more system work (user decision 2026-07-04) — pick them up before tuning zone 
 ### Code (Source/BreakingWave/)
 - [x] UE5 project created (first-person template base)
 - [x] BreakingWaveCharacter — base first-person character (walk + sprint + prone)
-- [x] Prone (Decisions 023 + 025): LeftControl toggle, rides engine crouch (instant capsule
+- [x] Prone (Decisions 023 + 025): C toggle (rebound from LeftControl 2026-07-15 — Ctrl was
+  too hard to reach while holding Shift+W), rides engine crouch (instant capsule
   shrink, clearance check on stand-up), camera drops to ProneEyeHeight above ground; STATIONARY
   by design — movement input is ignored while prone and during transitions (Decision 025,
   feel-checked 2026-07-06); tunables ProneCapsuleHalfHeight/ProneEyeHeight on the character. Jump binding removed
@@ -58,17 +59,21 @@ more system work (user decision 2026-07-04) — pick them up before tuning zone 
   FirstPersonPrimitiveType::WorldSpaceRepresentation proxy, so the toggle must also swap the
   body mesh's primitive type to None and back (SetFirstPersonPrimitiveType). Debug-only —
   the game stays first-person only. Tunable: DebugThirdPersonDistance (400)
-- [x] Dive-into-prone (2026-07-15, per 06_COMBAT.md + Decision 025): going prone while moving
-  keeps the momentum and turns the entry into a short ballistic dive — LaunchCharacter adds
-  ProneDiveUpwardSpeed (180 → ~0.37 s airtime, ~17 cm rise, ~3.3 m arc at sprint; set 0 for a
-  flat slide), air braking is zeroed so the arc keeps its speed, and after landing the
-  CharacterMovementComponent's braking (swapped to zero friction + SlideDeceleration 900 cm/s²)
-  bleeds the rest off; prior braking values restored once speed falls under SlideSettleSpeed
-  (60) or on stand-up. Capsule still shrinks on the toggle frame (06_COMBAT.md "drop
-  instantly") and DoMove already ignores input while prone, so there is no steering. All three
-  numbers tentative. IsSliding() exposed for the later headbob/anim passes.
-  FEEL-CHECK FAILED 2026-07-15: "even more just sliding on the ground, not like jump to
-  ground" — see Next Steps for the rework leads
+- [x] Dive-into-prone (2026-07-15, per 06_COMBAT.md + Decision 025, REWORKED same day after
+  a failed feel-check): going prone while moving keeps the momentum and turns the entry into
+  a real ballistic dive. LaunchCharacter adds ProneDiveUpwardSpeed (300 → ~0.6 s airtime,
+  ~46 cm rise; 0 = flat slide), air braking is zeroed so the arc keeps its speed. THE CAMERA
+  STAYS AT STANDING EYE HEIGHT DURING FLIGHT — the fast eye-drop blend (ProneDropDuration)
+  now fires from a Landed() override, not at launch (the first build dropped the eye during
+  flight, which visually erased the arc: "still just sliding"). After touchdown the swapped
+  braking (zero friction + SlideDeceleration 2500 cm/s²) gives a SHORT impact skid (~1.6 m
+  from sprint, ~0.7 m from walk), not a glide; prior braking restored under SlideSettleSpeed
+  (60) or on stand-up (stand-up mid-air also cancels the pending eye drop). The body
+  one-shot is compressed to predicted flight time + ProneDropDuration so its floor-impact
+  frames land near touchdown. Stationary prone entry (below SlideSettleSpeed) is unchanged —
+  eye drop starts immediately as before. All numbers tentative; no BP overrides exist, so
+  the C++ defaults are live. IsSliding() exposed for the later headbob/anim passes.
+  Feel-check PENDING
 - [x] BreakingWaveCameraManager — pitch-limited camera manager stub
 - [x] BreakingWaveGameMode / PlayerController — base classes
 
@@ -76,7 +81,7 @@ more system work (user decision 2026-07-04) — pick them up before tuning zone 
 - [x] Tools/GenerateBeachHeightmap.ps1 — generates the zone-profiled heightmap (SourceAssets/BeachHeightmap_1009.png); re-run after editing its Profile/Dunes/Berm/Craters tables
 - [x] Tools/PlaceBeachObstacles.py — in-editor Python; spawns grey-box hedgehogs (Zone 2), barbed wire, and debris piles (Zone 3) from editable tables, traced onto the landscape; idempotent (re-run clears prior batch). Requires PythonScriptPlugin + EditorScriptingUtilities (now enabled in .uproject)
 - [x] Tools/PlaceHeroPieces.py — in-editor Python; assembles the 3 Zone 4 bunkers (hollow, sea-facing slit, rear door) and 3 Zone 0 landing craft (open hull + dropped ramp) from SM_Cube; idempotent (GreyboxHero tag, per-assembly subfolders), pieces stay individually tweakable
-- [x] Tools/AddProneInput.py — creates IA_Prone, maps LeftControl in IMC_Default, sets the BP's ProneAction slot; idempotent; edit PRONE_KEY_NAME and re-run to change the key (already run, works headless)
+- [x] Tools/AddProneInput.py — creates IA_Prone, maps PRONE_KEY_NAME (currently C; was LeftControl until 2026-07-15) in IMC_Default replacing any old prone key, sets the BP's ProneAction slot; idempotent; edit PRONE_KEY_NAME and re-run to change the key (works headless; save failure now raises loudly)
 - [x] Tools/RetargetProneAnims.py — builds IK rigs + UE4→UE5 retargeter (auto chains/mapping/alignment), retargets all 8 AnimStarterPack prone anims to Content/AnimStarterPack/Retarget/*_UE5, sets the BP's ProneBodyIdleAnim; idempotent (already run). NOTE: needs full editor, not commandlet — run in-editor or via `-ExecutePythonScript` (the batch op touches Slate)
 - [x] Tools/SetProneTransitionAnims.py — sets the BP's StandToProneAnim/ProneToStandAnim slots to the retargeted transition anims; idempotent, works headless via `-run=pythonscript` (already run)
 - [x] Tools/AddSprintToLocomotion.py — SUPERSEDED by RebuildLocomotionAsRifle.py (kept for history; its 900-row is rewritten by the newer tool)
@@ -107,29 +112,20 @@ more system work (user decision 2026-07-04) — pick them up before tuning zone 
      if they read wrong. NOTE: standing idle comes from the ABP's separate Idle state
      (MM_Idle, unarmed) — the blendspace rifle idle only shows while moving slowly;
      making the standing idle carry the rifle means editing ABP_Unarmed's Idle state
-  2. REWORK dive-into-prone (feel-check FAILED 2026-07-15: reads as sliding on the ground,
-     not jumping to the ground). Diagnosis to start from — the physics arc exists but the
-     FIRST-PERSON CAMERA never rises: the 180 pop lifts the pawn only ~17 cm while the
-     eye-height blend simultaneously drops the camera ~130 cm over the same 0.35 s window,
-     so the net camera path is monotonically down-and-forward = exactly what a slide looks
-     like. The feel lives in the camera, not the capsule. Leads, in suggested order:
-     a. Re-sequence the camera: during flight keep the camera at (or slightly above)
-        standing eye height so the player sees the world drop away, then run the fast
-        eye-drop blend ON LANDING (needs a Landed() override or a movement-mode check in
-        Tick to trigger the blend; ProneDropDuration then applies from touchdown, and the
-        dive one-shot anim should probably also start at launch but hold its floor-impact
-        frames until landing)
-     b. Raise ProneDiveUpwardSpeed (300–400 → 0.6–0.8 s airtime, 45–80 cm rise) so the
-        arc is real even before camera work; may need (a) anyway or it just prolongs the
-        slide feel
-     c. Add a brief camera pitch-down during flight (the body tips forward in a dive;
-        bUsePawnControlRotation currently keeps pitch fully under the mouse — an additive
-        offset would need care)
-     d. Shorten the ground skid after landing (raise SlideDeceleration ~1500+) so the
-        sequence reads leap → impact → short skid → stop, not leap → long slide
-     Current knobs: ProneDiveUpwardSpeed (180; 0 = flat slide), SlideDeceleration (900),
-     SlideSettleSpeed (60). Code: BeginSlideFromMomentum/SettleSlide in
-     BreakingWaveCharacter.cpp; camera drop = StartEyeHeightBlend call in OnStartCrouch
+  2. FEEL-CHECK the reworked dive-into-prone (rebuilt 2026-07-15 after the "still just
+     sliding" verdict; jump confirmed BETTER by the user same day, fall then made snappier):
+     sprint + C should now read leap → world drops away → fast fall → impact → short skid →
+     stop. What changed: camera stays at standing eye height during flight, eye drop fires
+     on landing (Landed() override); ProneDiveUpwardSpeed 300 (~0.6 s symmetric airtime);
+     ProneDiveFallGravityScale 2 (double gravity past the apex → fall ~0.22 s instead of
+     ~0.31 s, rise untouched; body one-shot auto-compresses to the predicted asymmetric
+     flight); SlideDeceleration 2500 (~1.6 m skid from sprint). Knobs if it still reads
+     wrong: more air = ProneDiveUpwardSpeed (400 → ~0.8 s), snappier/floatier fall =
+     ProneDiveFallGravityScale, harder stop = SlideDeceleration, slower eye drop on impact
+     = ProneDropDuration. Still-unbuilt lead
+     if the flight itself feels flat: a brief additive camera pitch-down during flight
+     (bUsePawnControlRotation keeps pitch under the mouse — needs care). Code:
+     BeginSlideFromMomentum / Landed / StartEyeDropToProne in BreakingWaveCharacter.cpp
   3. Headbob (primarily vertical bounce, small amplitude)
 - [ ] **Step 2**: Run through each zone and record transit times in 05_ZONES.md
 - [ ] Editor cleanup while in the BP anyway: delete BP_FirstPersonCharacter's touch-UI jump
@@ -153,6 +149,26 @@ so world = profile-meters × 100 − 50400 on both axes. Profile coords below wi
 
 ## What Was Done (since last update)
 
+- Dive iteration 2 (2026-07-15, user: "jump is better" but wants a faster fall + anim to
+  keep up + a reachable key): (a) new ProneDiveFallGravityScale (2) — gravity doubles once
+  vertical velocity crosses zero at the apex, restored on landing/stand-up; the rise keeps
+  its pop, the fall snaps (~0.31 s → ~0.22 s); (b) PredictDiveFlightTime() accounts for the
+  asymmetric arc, so the body one-shot compresses to the true shorter flight and its
+  floor-impact frames still land at touchdown (the "make animation faster" ask — it tracks
+  automatically); (c) prone rebound LeftControl → C (Ctrl unreachable during LeftShift+W):
+  PRONE_KEY_NAME edited in Tools/AddProneInput.py, run headless, DISK-VERIFIED from a
+  fresh process — C → IA_Prone is the only C mapping, old LeftControl mapping replaced;
+  the tool now raises loudly on save_asset failure. Compiled clean. Feel-check pending
+- Dive-into-prone REWORKED (2026-07-15, same day as the failed feel-check; user confirmed
+  the diagnosis: "does not jump at all… immediately hit ground then slide like on snow"):
+  (a) eye-drop blend moved from launch to touchdown — new Landed() override +
+  StartEyeDropToProne(); during flight the camera holds standing eye height so the arc is
+  visible; bDiveEyeDropPending set by the launch, cleared by Landed or stand-up mid-air;
+  (b) ProneDiveUpwardSpeed 180 → 300 (~0.37 s → ~0.6 s airtime, 17 → 46 cm rise);
+  (c) SlideDeceleration 900 → 2500 (sprint skid ~4.5 m → ~1.6 m — user: friction should
+  stop you quickly); (d) body one-shot now compressed to predicted flight + drop time.
+  Verified the BP has no serialized overrides of the tunables, so the new C++ defaults are
+  live. Compiled clean (4.7 s). Feel-check pending
 - Dive feel-check FAILED same day (2026-07-15): user verdict "even more just sliding on the
   ground, not like jump to ground". Working diagnosis: the arc is physically there but
   invisible from first person — the camera only ever moves down (17 cm pawn rise vs 130 cm
