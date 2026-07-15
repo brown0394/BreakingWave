@@ -273,11 +273,18 @@ void ABreakingWaveCharacter::BeginSlideFromMomentum()
 	bPreSlideUseSeparateBrakingFriction = Movement->bUseSeparateBrakingFriction;
 	PreSlideBrakingFriction = Movement->BrakingFriction;
 	PreSlideBrakingDeceleration = Movement->BrakingDecelerationWalking;
+	PreSlideBrakingDecelerationFalling = Movement->BrakingDecelerationFalling;
 
 	Movement->bUseSeparateBrakingFriction = true;
 	Movement->BrakingFriction = 0.f;
 	Movement->BrakingDecelerationWalking = SlideDeceleration;
+	Movement->BrakingDecelerationFalling = 0.f;
 	bSlideActive = true;
+
+	if (ProneDiveUpwardSpeed > 0.f && Movement->IsMovingOnGround())
+	{
+		LaunchCharacter(FVector(0.f, 0.f, ProneDiveUpwardSpeed), false, true);
+	}
 }
 
 void ABreakingWaveCharacter::SettleSlide()
@@ -291,6 +298,7 @@ void ABreakingWaveCharacter::SettleSlide()
 	Movement->bUseSeparateBrakingFriction = bPreSlideUseSeparateBrakingFriction;
 	Movement->BrakingFriction = PreSlideBrakingFriction;
 	Movement->BrakingDecelerationWalking = PreSlideBrakingDeceleration;
+	Movement->BrakingDecelerationFalling = PreSlideBrakingDecelerationFalling;
 	bSlideActive = false;
 }
 

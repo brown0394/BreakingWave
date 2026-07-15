@@ -135,6 +135,10 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Movement")
 	float SlideSettleSpeed = 60.f;
 
+	/** Upward pop applied on prone entry at speed, turning the drop into a ballistic dive (~0.37 s airtime at 180; 0 = flat slide) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Movement")
+	float ProneDiveUpwardSpeed = 180.f;
+
 	/** Orbit distance of the debug third person camera */
 	UPROPERTY(EditAnywhere, Category="Debug")
 	float DebugThirdPersonDistance = 400.f;
@@ -205,6 +209,8 @@ private:
 	float PreSlideBrakingFriction = 0.f;
 
 	float PreSlideBrakingDeceleration = 0.f;
+
+	float PreSlideBrakingDecelerationFalling = 0.f;
 
 public:
 

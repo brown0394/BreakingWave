@@ -2,7 +2,7 @@
 
 > Last updated: 2026-07-15
 
-## Phase: Step 2 — First-Person Movement (prone + transitions + F6 done and feel-checked; slide-into-prone built, feel-check pending; headbob remains)
+## Phase: Step 2 — First-Person Movement (prone + transitions + F6 done and feel-checked; dive-into-prone FAILED feel-check — rework is the resume point; headbob remains)
 
 All grey-box geometry is placed. Fog and the zone-size walkthrough are DEFERRED until after
 more system work (user decision 2026-07-04) — pick them up before tuning zone sizes.
@@ -58,13 +58,17 @@ more system work (user decision 2026-07-04) — pick them up before tuning zone 
   FirstPersonPrimitiveType::WorldSpaceRepresentation proxy, so the toggle must also swap the
   body mesh's primitive type to None and back (SetFirstPersonPrimitiveType). Debug-only —
   the game stays first-person only. Tunable: DebugThirdPersonDistance (400)
-- [x] Slide-into-prone (2026-07-15, per 06_COMBAT.md + Decision 025): going prone while moving
-  keeps the momentum — during the slide the CharacterMovementComponent's braking is swapped to
-  zero friction + SlideDeceleration (900 cm/s², linear bleed-off), then prior braking values are
-  restored once speed falls under SlideSettleSpeed (60) or on stand-up. Pure momentum: DoMove
-  already ignores input while prone, so there is no steering. At 600 entry ≈ 2.0 m / 0.67 s,
-  at 900 ≈ 4.5 m / 1.0 s — both tentative, tune SlideDeceleration. IsSliding() exposed for the
-  later headbob/anim passes. Compiled clean; NOT yet feel-checked in PIE
+- [x] Dive-into-prone (2026-07-15, per 06_COMBAT.md + Decision 025): going prone while moving
+  keeps the momentum and turns the entry into a short ballistic dive — LaunchCharacter adds
+  ProneDiveUpwardSpeed (180 → ~0.37 s airtime, ~17 cm rise, ~3.3 m arc at sprint; set 0 for a
+  flat slide), air braking is zeroed so the arc keeps its speed, and after landing the
+  CharacterMovementComponent's braking (swapped to zero friction + SlideDeceleration 900 cm/s²)
+  bleeds the rest off; prior braking values restored once speed falls under SlideSettleSpeed
+  (60) or on stand-up. Capsule still shrinks on the toggle frame (06_COMBAT.md "drop
+  instantly") and DoMove already ignores input while prone, so there is no steering. All three
+  numbers tentative. IsSliding() exposed for the later headbob/anim passes.
+  FEEL-CHECK FAILED 2026-07-15: "even more just sliding on the ground, not like jump to
+  ground" — see Next Steps for the rework leads
 - [x] BreakingWaveCameraManager — pitch-limited camera manager stub
 - [x] BreakingWaveGameMode / PlayerController — base classes
 
@@ -103,11 +107,29 @@ more system work (user decision 2026-07-04) — pick them up before tuning zone 
      if they read wrong. NOTE: standing idle comes from the ABP's separate Idle state
      (MM_Idle, unarmed) — the blendspace rifle idle only shows while moving slowly;
      making the standing idle carry the rifle means editing ABP_Unarmed's Idle state
-  2. Feel-check slide-into-prone (same PIE session): sprint with Shift+W, hit LeftControl —
-     the drop should carry ~4.5 m of decelerating slide before settling into stationary
-     prone; at plain W expect ~2 m. Watch for: slide reading too long or too short (tune
-     SlideDeceleration on the character), and the body anim during the slide (the dive
-     one-shot plays while still moving — flag if it reads wrong)
+  2. REWORK dive-into-prone (feel-check FAILED 2026-07-15: reads as sliding on the ground,
+     not jumping to the ground). Diagnosis to start from — the physics arc exists but the
+     FIRST-PERSON CAMERA never rises: the 180 pop lifts the pawn only ~17 cm while the
+     eye-height blend simultaneously drops the camera ~130 cm over the same 0.35 s window,
+     so the net camera path is monotonically down-and-forward = exactly what a slide looks
+     like. The feel lives in the camera, not the capsule. Leads, in suggested order:
+     a. Re-sequence the camera: during flight keep the camera at (or slightly above)
+        standing eye height so the player sees the world drop away, then run the fast
+        eye-drop blend ON LANDING (needs a Landed() override or a movement-mode check in
+        Tick to trigger the blend; ProneDropDuration then applies from touchdown, and the
+        dive one-shot anim should probably also start at launch but hold its floor-impact
+        frames until landing)
+     b. Raise ProneDiveUpwardSpeed (300–400 → 0.6–0.8 s airtime, 45–80 cm rise) so the
+        arc is real even before camera work; may need (a) anyway or it just prolongs the
+        slide feel
+     c. Add a brief camera pitch-down during flight (the body tips forward in a dive;
+        bUsePawnControlRotation currently keeps pitch fully under the mouse — an additive
+        offset would need care)
+     d. Shorten the ground skid after landing (raise SlideDeceleration ~1500+) so the
+        sequence reads leap → impact → short skid → stop, not leap → long slide
+     Current knobs: ProneDiveUpwardSpeed (180; 0 = flat slide), SlideDeceleration (900),
+     SlideSettleSpeed (60). Code: BeginSlideFromMomentum/SettleSlide in
+     BreakingWaveCharacter.cpp; camera drop = StartEyeHeightBlend call in OnStartCrouch
   3. Headbob (primarily vertical bounce, small amplitude)
 - [ ] **Step 2**: Run through each zone and record transit times in 05_ZONES.md
 - [ ] Editor cleanup while in the BP anyway: delete BP_FirstPersonCharacter's touch-UI jump
@@ -131,6 +153,20 @@ so world = profile-meters × 100 − 50400 on both axes. Profile coords below wi
 
 ## What Was Done (since last update)
 
+- Dive feel-check FAILED same day (2026-07-15): user verdict "even more just sliding on the
+  ground, not like jump to ground". Working diagnosis: the arc is physically there but
+  invisible from first person — the camera only ever moves down (17 cm pawn rise vs 130 cm
+  simultaneous eye-drop blend). Rework leads documented in Next Steps item 2; the strongest
+  is re-sequencing the camera so the eye drop happens on LANDING, not during flight
+- Ballistic dive added on top of the slide (2026-07-15, user request — "projectile jump to
+  prone" reads more real than skimming the ground): BeginSlideFromMomentum now also
+  LaunchCharacter(0,0,ProneDiveUpwardSpeed) (Z-override, keeps horizontal velocity) and zeroes
+  BrakingDecelerationFalling for the slide window (the template's 1500 would eat ~300 cm/s of
+  the arc mid-air); landing hands over to the already-set slide braking, SettleSlide restores
+  all four saved braking values. Dive only fires from the ground (IsMovingOnGround gate).
+  180 up ≈ 0.37 s airtime, tuned to roughly match ProneDropDuration (0.35 s) so the camera
+  drop and dive one-shot land with the body. Committed the flat-slide checkpoint first
+  (1f0b497), dive compiled clean on top
 - Slide-into-prone built (2026-07-15): the last-but-one Step 2 movement item (06_COMBAT.md
   "momentum slide"; Decision 025 explicitly kept it — momentum, not input). Implementation
   rides what already exists: Crouch() never zeroed velocity — the instant stop came from CMC
