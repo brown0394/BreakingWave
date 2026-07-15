@@ -1,8 +1,8 @@
 # Current Status
 
-> Last updated: 2026-07-12
+> Last updated: 2026-07-15
 
-## Phase: Step 2 — First-Person Movement (prone + transitions + F6 debug view done and feel-checked; slide, headbob remain)
+## Phase: Step 2 — First-Person Movement (prone + transitions + F6 done and feel-checked; slide-into-prone built, feel-check pending; headbob remains)
 
 All grey-box geometry is placed. Fog and the zone-size walkthrough are DEFERRED until after
 more system work (user decision 2026-07-04) — pick them up before tuning zone sizes.
@@ -58,6 +58,13 @@ more system work (user decision 2026-07-04) — pick them up before tuning zone 
   FirstPersonPrimitiveType::WorldSpaceRepresentation proxy, so the toggle must also swap the
   body mesh's primitive type to None and back (SetFirstPersonPrimitiveType). Debug-only —
   the game stays first-person only. Tunable: DebugThirdPersonDistance (400)
+- [x] Slide-into-prone (2026-07-15, per 06_COMBAT.md + Decision 025): going prone while moving
+  keeps the momentum — during the slide the CharacterMovementComponent's braking is swapped to
+  zero friction + SlideDeceleration (900 cm/s², linear bleed-off), then prior braking values are
+  restored once speed falls under SlideSettleSpeed (60) or on stand-up. Pure momentum: DoMove
+  already ignores input while prone, so there is no steering. At 600 entry ≈ 2.0 m / 0.67 s,
+  at 900 ≈ 4.5 m / 1.0 s — both tentative, tune SlideDeceleration. IsSliding() exposed for the
+  later headbob/anim passes. Compiled clean; NOT yet feel-checked in PIE
 - [x] BreakingWaveCameraManager — pitch-limited camera manager stub
 - [x] BreakingWaveGameMode / PlayerController — base classes
 
@@ -96,7 +103,11 @@ more system work (user decision 2026-07-04) — pick them up before tuning zone 
      if they read wrong. NOTE: standing idle comes from the ABP's separate Idle state
      (MM_Idle, unarmed) — the blendspace rifle idle only shows while moving slowly;
      making the standing idle carry the rifle means editing ABP_Unarmed's Idle state
-  2. Slide-into-prone (momentum slide while sprinting)
+  2. Feel-check slide-into-prone (same PIE session): sprint with Shift+W, hit LeftControl —
+     the drop should carry ~4.5 m of decelerating slide before settling into stationary
+     prone; at plain W expect ~2 m. Watch for: slide reading too long or too short (tune
+     SlideDeceleration on the character), and the body anim during the slide (the dive
+     one-shot plays while still moving — flag if it reads wrong)
   3. Headbob (primarily vertical bounce, small amplitude)
 - [ ] **Step 2**: Run through each zone and record transit times in 05_ZONES.md
 - [ ] Editor cleanup while in the BP anyway: delete BP_FirstPersonCharacter's touch-UI jump
@@ -120,6 +131,17 @@ so world = profile-meters × 100 − 50400 on both axes. Profile coords below wi
 
 ## What Was Done (since last update)
 
+- Slide-into-prone built (2026-07-15): the last-but-one Step 2 movement item (06_COMBAT.md
+  "momentum slide"; Decision 025 explicitly kept it — momentum, not input). Implementation
+  rides what already exists: Crouch() never zeroed velocity — the instant stop came from CMC
+  braking against MaxWalkSpeedCrouched 0 — so BeginSlideFromMomentum() (called from
+  OnStartCrouch when ground speed > SlideSettleSpeed) just swaps braking to
+  bUseSeparateBrakingFriction + BrakingFriction 0 + BrakingDecelerationWalking =
+  SlideDeceleration, giving a linear momentum bleed with zero input (DoMove already dead
+  while prone). SettleSlide() restores the saved braking values when Tick sees speed ≤
+  SlideSettleSpeed or on stand-up mid-slide. The existing dive one-shot + camera drop play
+  over the slide unchanged. Compiled clean (19 s, no zombie processes this time).
+  Feel-check pending — same PIE session as the locomotion re-check
 - FIXED "legs not moving while walking/running" (2026-07-12): user's feel-check of the
   all-rifle locomotion failed — body played the anim but the legs stayed planted. Root
   cause chain, each link verified headless: (1) the blendspace was HEALTHY — 24 samples,

@@ -127,6 +127,14 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Movement")
 	float ProneStandUpDuration = 0.9f;
 
+	/** Ground deceleration while momentum from going prone at speed bleeds off (slide-into-prone, 06_COMBAT.md) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Movement")
+	float SlideDeceleration = 900.f;
+
+	/** Speed below which a slide settles into the stationary prone */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Movement")
+	float SlideSettleSpeed = 60.f;
+
 	/** Orbit distance of the debug third person camera */
 	UPROPERTY(EditAnywhere, Category="Debug")
 	float DebugThirdPersonDistance = 400.f;
@@ -166,6 +174,10 @@ private:
 
 	void RestoreStandingBodyAnim();
 
+	void BeginSlideFromMomentum();
+
+	void SettleSlide();
+
 	FVector StandingFirstPersonMeshRelativeLocation = FVector::ZeroVector;
 
 	TSubclassOf<UAnimInstance> StandingBodyAnimClass;
@@ -186,6 +198,14 @@ private:
 
 	FTimerHandle ProneBodyAnimTimer;
 
+	bool bSlideActive = false;
+
+	bool bPreSlideUseSeparateBrakingFriction = false;
+
+	float PreSlideBrakingFriction = 0.f;
+
+	float PreSlideBrakingDeceleration = 0.f;
+
 public:
 
 	/** Console command: toggles the debug third person view (shows the world-space body mesh, hides the FP arms) */
@@ -197,6 +217,9 @@ public:
 
 	/** True while dropping into or rising out of prone; movement input is ignored during it */
 	bool IsProneTransitionActive() const;
+
+	/** True while prone momentum is still carrying the character along the ground */
+	bool IsSliding() const { return bSlideActive; }
 
 	/** Returns the first person mesh **/
 	USkeletalMeshComponent* GetFirstPersonMesh() const { return FirstPersonMesh; }

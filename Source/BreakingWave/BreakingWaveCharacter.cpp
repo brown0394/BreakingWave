@@ -168,6 +168,7 @@ void ABreakingWaveCharacter::OnStartCrouch(float HalfHeightAdjust, float ScaledH
 	StartEyeHeightBlend(FirstPersonMesh->GetRelativeLocation() - FVector(0.f, 0.f, EyeDropToProne), ProneDropDuration);
 	FirstPersonMesh->SetVisibility(false);
 	ProneTransitionEndTime = GetWorld()->GetTimeSeconds() + ProneDropDuration;
+	BeginSlideFromMomentum();
 
 	GetWorldTimerManager().ClearTimer(ProneBodyAnimTimer);
 	if (StandToProneAnim && ProneBodyIdleAnim)
@@ -185,6 +186,7 @@ void ABreakingWaveCharacter::OnEndCrouch(float HalfHeightAdjust, float ScaledHal
 {
 	Super::OnEndCrouch(HalfHeightAdjust, ScaledHalfHeightAdjust);
 
+	SettleSlide();
 	StartEyeHeightBlend(StandingFirstPersonMeshRelativeLocation, ProneStandUpDuration);
 	FirstPersonMesh->SetVisibility(true);
 	ProneTransitionEndTime = GetWorld()->GetTimeSeconds() + ProneStandUpDuration;
@@ -204,6 +206,11 @@ void ABreakingWaveCharacter::OnEndCrouch(float HalfHeightAdjust, float ScaledHal
 void ABreakingWaveCharacter::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
+
+	if (bSlideActive && GetCharacterMovement()->Velocity.Size2D() <= SlideSettleSpeed)
+	{
+		SettleSlide();
+	}
 
 	if (bEyeHeightBlendActive)
 	{
@@ -253,6 +260,38 @@ void ABreakingWaveCharacter::RestoreStandingBodyAnim()
 	{
 		GetMesh()->SetAnimInstanceClass(StandingBodyAnimClass);
 	}
+}
+
+void ABreakingWaveCharacter::BeginSlideFromMomentum()
+{
+	UCharacterMovementComponent* Movement = GetCharacterMovement();
+	if (Movement->Velocity.Size2D() <= SlideSettleSpeed)
+	{
+		return;
+	}
+
+	bPreSlideUseSeparateBrakingFriction = Movement->bUseSeparateBrakingFriction;
+	PreSlideBrakingFriction = Movement->BrakingFriction;
+	PreSlideBrakingDeceleration = Movement->BrakingDecelerationWalking;
+
+	Movement->bUseSeparateBrakingFriction = true;
+	Movement->BrakingFriction = 0.f;
+	Movement->BrakingDecelerationWalking = SlideDeceleration;
+	bSlideActive = true;
+}
+
+void ABreakingWaveCharacter::SettleSlide()
+{
+	if (!bSlideActive)
+	{
+		return;
+	}
+
+	UCharacterMovementComponent* Movement = GetCharacterMovement();
+	Movement->bUseSeparateBrakingFriction = bPreSlideUseSeparateBrakingFriction;
+	Movement->BrakingFriction = PreSlideBrakingFriction;
+	Movement->BrakingDecelerationWalking = PreSlideBrakingDeceleration;
+	bSlideActive = false;
 }
 
 void ABreakingWaveCharacter::DebugThirdPerson()
