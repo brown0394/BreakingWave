@@ -14,6 +14,7 @@
 | `08_ENEMY_AI.md` | MG bunker AI (priority targeting, accuracy, stops), infantry AI, difficulty curve |
 | `09_ALLY_NPC.md` | Allied NPC personality types, density/corpse management, ammo looting |
 | `10_CHECKLIST.md` | 8-phase development order with per-step goals and document assignments |
+| `11_ENGINE_NOTES.md` | UE 5.6 gotchas — headless/editor-Python patterns, anim/retarget traps, camera/input/rendering quirks |
 
 ## When to Read Each Document
 
@@ -43,6 +44,7 @@
 | Narrative writing, character perspective | `01_SOUL.md`, `05_ZONES.md` |
 | Design discussion (not just coding) | `01_SOUL.md`, `03_DECISIONS.md` + relevant docs |
 | Checking what to build next | `10_CHECKLIST.md`, `02_STATUS.md` |
+| Editor-Python tools, headless asset work, retargeting, camera/input C++ | `11_ENGINE_NOTES.md` |
 
 ## Key Constraints to Remember
 
