@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "Engine/TimerHandle.h"
 #include "GameFramework/Character.h"
+#include "HeadbobCameraShake.h"
 #include "Logging/LogMacros.h"
 #include "BreakingWaveCharacter.generated.h"
 
@@ -143,6 +144,10 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Movement")
 	float ProneDiveFallGravityScale = 2.f;
 
+	/** Handheld-camera bob/breathing knobs (07_CAMERA.md); applied by UHeadbobShakePattern, started on possession */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Camera")
+	FHeadbobSettings HeadbobSettings;
+
 	/** Orbit distance of the debug third person camera */
 	UPROPERTY(EditAnywhere, Category="Debug")
 	float DebugThirdPersonDistance = 400.f;
@@ -170,6 +175,8 @@ protected:
 	virtual void OnEndCrouch(float HalfHeightAdjust, float ScaledHalfHeightAdjust) override;
 
 	virtual void Landed(const FHitResult& Hit) override;
+
+	virtual void NotifyControllerChanged() override;
 
 	/** Set up input action bindings */
 	virtual void SetupPlayerInputComponent(UInputComponent* InputComponent) override;
@@ -244,6 +251,15 @@ public:
 
 	/** True while prone momentum is still carrying the character along the ground */
 	bool IsSliding() const { return bSlideActive; }
+
+	/** True while the F6 debug orbit camera is active; headbob stays out of the debug view */
+	bool IsDebugThirdPersonActive() const { return bDebugThirdPersonViewActive; }
+
+	const FHeadbobSettings& GetHeadbobSettings() const { return HeadbobSettings; }
+
+	float GetWalkSpeed() const { return WalkSpeed; }
+
+	float GetRunSpeed() const { return RunSpeed; }
 
 	/** Returns the first person mesh **/
 	USkeletalMeshComponent* GetFirstPersonMesh() const { return FirstPersonMesh; }

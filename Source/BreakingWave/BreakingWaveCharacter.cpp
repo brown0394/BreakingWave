@@ -10,7 +10,10 @@
 #include "EnhancedInputComponent.h"
 #include "InputActionValue.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "GameFramework/PlayerController.h"
 #include "GameFramework/SpringArmComponent.h"
+#include "Camera/PlayerCameraManager.h"
+#include "HeadbobCameraShake.h"
 #include "TimerManager.h"
 #include "BreakingWave.h"
 
@@ -66,6 +69,19 @@ void ABreakingWaveCharacter::BeginPlay()
 	GetCharacterMovement()->MaxWalkSpeedCrouched = 0.f;
 	StandingFirstPersonMeshRelativeLocation = FirstPersonMesh->GetRelativeLocation();
 	StandingBodyAnimClass = GetMesh()->GetAnimClass();
+}
+
+void ABreakingWaveCharacter::NotifyControllerChanged()
+{
+	Super::NotifyControllerChanged();
+
+	if (const APlayerController* PlayerController = Cast<APlayerController>(GetController()))
+	{
+		if (PlayerController->PlayerCameraManager)
+		{
+			PlayerController->PlayerCameraManager->StartCameraShake(UHeadbobCameraShake::StaticClass());
+		}
+	}
 }
 
 void ABreakingWaveCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)

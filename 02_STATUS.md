@@ -1,8 +1,8 @@
 # Current Status
 
-> Last updated: 2026-07-15
+> Last updated: 2026-07-17
 
-## Phase: Step 2 — First-Person Movement (prone + transitions + F6 done and feel-checked; dive-into-prone FAILED feel-check — rework is the resume point; headbob remains)
+## Phase: Step 2 — First-Person Movement (prone + transitions + F6 + dive-into-prone done; headbob BUILT, feel-check is the resume point)
 
 All grey-box geometry is placed. Fog and the zone-size walkthrough are DEFERRED until after
 more system work (user decision 2026-07-04) — pick them up before tuning zone sizes.
@@ -73,7 +73,26 @@ more system work (user decision 2026-07-04) — pick them up before tuning zone 
   frames land near touchdown. Stationary prone entry (below SlideSettleSpeed) is unchanged —
   eye drop starts immediately as before. All numbers tentative; no BP overrides exist, so
   the C++ defaults are live. IsSliding() exposed for the later headbob/anim passes.
-  Feel-check PENDING
+  Feel-check DONE (2026-07-17): good enough to move on; any further dive polish is
+  deliberately deferred until more systems exist
+- [x] Headbob (2026-07-17, Decision 026, grilled + spec agreed before building): custom
+  UHeadbobShakePattern + UHeadbobCameraShake (Source/BreakingWave/HeadbobCameraShake.h/.cpp),
+  started once per possession from NotifyControllerChanged (bSingleInstance, infinite);
+  reads the view-target character every update so it survives possession changes. Figure-8:
+  vertical sine at footfall rate + half-rate lateral sway (LateralRatio 0.4 — set to 0 for
+  the vertical-only motion-sickness fallback). Speed-synced amplitude AND frequency
+  (phase-continuous), anchors at WalkSpeed/RunSpeed: 1.5 cm / 2.8 Hz at 600, 2.5 cm /
+  3.4 Hz at 900, scaling down to zero below walk speed. Stationary = breathing (0.3 cm,
+  0.35 Hz); prone = breathing × 0.4 ("near-zero"); airborne/slide/prone-transition/F6 debug
+  view = still (those states own the camera). Amplitudes ease over SmoothingTime 0.2 s —
+  no pops on stop/land/prone. All knobs in FHeadbobSettings on the character (Category
+  "Camera"), C++ defaults live, ALL NUMBERS TENTATIVE. Compiled clean. Feel-check PENDING.
+  First in-PIE run felt like NOTHING — the pattern resolved the view target via
+  GetViewTarget(), which can return the PlayerController (engine keeps it as a valid
+  ViewTarget.Target), so the character cast failed and output was zero every frame.
+  Fixed to GetViewTargetPawn(), the engine's controller→pawn resolver. Note for tuning:
+  the FP camera rides the head socket, so anims already add real head motion — if the
+  bob reads weak over it, raise Walk/SprintAmplitude rather than assuming it's dead
 - [x] BreakingWaveCameraManager — pitch-limited camera manager stub
 - [x] BreakingWaveGameMode / PlayerController — base classes
 
@@ -99,34 +118,22 @@ more system work (user decision 2026-07-04) — pick them up before tuning zone 
 
 ## Next Steps
 
-- [ ] **RESUME HERE — Step 2 continues** (read 04_PRINCIPLES.md + 07_CAMERA.md headbob
-  section first):
-  1. RE-feel-check the all-rifle locomotion (restart the editor first — assets changed
-     outside the session AGAIN on 2026-07-12: frozen-legs bug fixed, see What Was Done):
-     PIE + F6. W (600) should read as a proper rifle-carry run with feet matching the
-     ground (sprint anim at ~0.97); Shift+W (900) same anim at ~1.46; standing idle
-     holds the rifle. Watch for: strafe/backpedal cadence — jogs are rate-scaled
-     foot-true (2.1× at 600, 3.2× at 900) which may read frantic; if so, lower those
-     rates in RebuildLocomotionAsRifle.py (accepting foot slide) and re-run. Diagonals
-     are triangulated between fwd and side samples (ASP has only 4 directions) — flag
-     if they read wrong. NOTE: standing idle comes from the ABP's separate Idle state
-     (MM_Idle, unarmed) — the blendspace rifle idle only shows while moving slowly;
-     making the standing idle carry the rifle means editing ABP_Unarmed's Idle state
-  2. FEEL-CHECK the reworked dive-into-prone (rebuilt 2026-07-15 after the "still just
-     sliding" verdict; jump confirmed BETTER by the user same day, fall then made snappier):
-     sprint + C should now read leap → world drops away → fast fall → impact → short skid →
-     stop. What changed: camera stays at standing eye height during flight, eye drop fires
-     on landing (Landed() override); ProneDiveUpwardSpeed 300 (~0.6 s symmetric airtime);
-     ProneDiveFallGravityScale 2 (double gravity past the apex → fall ~0.22 s instead of
-     ~0.31 s, rise untouched; body one-shot auto-compresses to the predicted asymmetric
-     flight); SlideDeceleration 2500 (~1.6 m skid from sprint). Knobs if it still reads
-     wrong: more air = ProneDiveUpwardSpeed (400 → ~0.8 s), snappier/floatier fall =
-     ProneDiveFallGravityScale, harder stop = SlideDeceleration, slower eye drop on impact
-     = ProneDropDuration. Still-unbuilt lead
-     if the flight itself feels flat: a brief additive camera pitch-down during flight
-     (bUsePawnControlRotation keeps pitch under the mouse — needs care). Code:
-     BeginSlideFromMomentum / Landed / StartEyeDropToProne in BreakingWaveCharacter.cpp
-  3. Headbob (primarily vertical bounce, small amplitude)
+- [ ] **RESUME HERE — Step 2 continues**:
+  1. FEEL-CHECK the headbob (built 2026-07-17, Decision 026): PIE. W then Shift+W —
+     cadence and amplitude should visibly differ and read as footfalls against the FP
+     arm swing; release W — camera should settle into faint breathing, no pop; C while
+     sprinting — bob must go silent for the whole dive/slide/transition (the arc is the
+     motion), then near-still breathing while prone; F6 debug orbit must be bob-free.
+     Watch for: lateral figure-8 queasiness (fallback = LateralRatio 0), frequency
+     mismatch with the visible arm-swing cadence (retune Walk/SprintFrequency), bob too
+     strong/weak (Walk/SprintAmplitude). All knobs in FHeadbobSettings on the character
+  2. RE-feel-check the all-rifle locomotion if not yet done (assets last changed
+     2026-07-12, frozen-legs fix — restart the editor first if it hasn't been since):
+     W (600) = rifle-carry run, feet matching ground; Shift+W (900) same anim at ~1.46;
+     strafe/backpedal may read frantic (rate-scaled 2.1×/3.2× — lower the rates in
+     RebuildLocomotionAsRifle.py accepting foot slide if so). Standing idle is still
+     the ABP's separate unarmed MM_Idle state — making it carry the rifle means editing
+     ABP_Unarmed's Idle state
 - [ ] **Step 2**: Run through each zone and record transit times in 05_ZONES.md
 - [ ] Editor cleanup while in the BP anyway: delete BP_FirstPersonCharacter's touch-UI jump
   nodes, then delete the DoJumpStart/DoJumpEnd shims in BreakingWaveCharacter
@@ -149,6 +156,16 @@ so world = profile-meters × 100 − 50400 on both axes. Profile coords below wi
 
 ## What Was Done (since last update)
 
+- Headbob built (2026-07-17): spec grilled question-by-question and agreed with the user
+  before any code (scope, home, motion shape, state gating each put as an explicit
+  decision — the grilling caught one collision: the user first picked hard amplitude
+  cuts, reversed after seeing it recreates the prone camera-teleport artifact). See
+  Decision 026 and the What Exists entry for the shape. Compiled clean; feel-check is
+  the resume point
+- Dive-into-prone feel-check DONE (2026-07-17): user closed it — good enough to build on;
+  further polish deliberately deferred until more systems exist. Unbuilt lead kept for
+  that later pass, if the flight ever feels flat: a brief additive camera pitch-down
+  during flight (bUsePawnControlRotation keeps pitch under the mouse — needs care)
 - Dive iteration 2 (2026-07-15, user: "jump is better" but wants a faster fall + anim to
   keep up + a reachable key): (a) new ProneDiveFallGravityScale (2) — gravity doubles once
   vertical velocity crosses zero at the apex, restored on landing/stand-up; the rise keeps

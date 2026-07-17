@@ -177,9 +177,13 @@ German → back to Allied:
 - Enemy targeting delay: tag the new Pawn, exclude from AI target filter for 1–2 seconds.
 
 ### Headbob
-- Add sine wave offset to camera position.
-- Bind amplitude/period to movement speed.
-- Add noise-based irregular offset in wounded state.
+- BUILT (2026-07-17, Decision 026): UHeadbobShakePattern, a custom camera-shake pattern —
+  vertical sine at footfall rate + half-rate lateral sway, amplitude AND frequency bound
+  to movement speed, breathing when stationary, near-zero prone, still while
+  airborne/sliding/transitioning. Knobs in FHeadbobSettings on the character; values
+  tentative until feel-checked.
+- Wounded state (noise-based irregular offset) NOT built — waits for the damage system;
+  it slots in as more pattern state in UpdateShakePatternImpl.
 
 ---
 
