@@ -34,10 +34,10 @@ Legend: `[x]` done · `[~]` partially done · `[ ]` not started.
 - [x] Implement running
 - [x] Implement prone (instant drop to ground) — C toggle (rebound from LeftControl 2026-07-15), stationary (Decision 025), transitions feel-checked 2026-07-08
 - [x] Debug third-person view toggle (dev tool, not a feature) — F6, verified 2026-07-08
-- [~] Sprint body animation reads as running — sprint row added to BS_Idle_Walk_Run via Tools/AddSprintToLocomotion.py (2026-07-08), feel-check pending
-- [~] Implement slide-into-prone (momentum slide) — built as a ballistic dive + short skid (2026-07-15, reworked twice on feel-checks: eye drop on landing, faster fall past apex), final feel-check pending
-- [ ] Implement headbob (primarily vertical bounce, small amplitude)
-- [ ] Run through each zone yourself and measure time
+- [x] Sprint body animation reads as running — BS_Idle_Walk_Run rebuilt all-rifle with foot-true rates (Tools/RebuildLocomotionAsRifle.py), feel-checked PASSED 2026-07-18
+- [x] Implement slide-into-prone (momentum slide) — built as a ballistic dive + short skid, feel-check closed as good-enough 2026-07-17
+- [x] Implement headbob (primarily vertical bounce, small amplitude) — Decision 026, feel-checked PASSED 2026-07-18
+- [ ] Run through each zone yourself and measure time — DEFERRED with fog until after base systems (2026-07-18); do together with the fog walkthrough
   - [ ] Zone 0 transit time: ___ seconds
   - [ ] Zone 1 transit time: ___ seconds
   - [ ] Zone 2 transit time: ___ seconds

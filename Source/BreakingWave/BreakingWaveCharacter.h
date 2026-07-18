@@ -88,14 +88,6 @@ protected:
 	UFUNCTION(BlueprintCallable, Category="Input")
 	virtual void DoProneToggle();
 
-	/** Empty shim: the template touch UI in BP_FirstPersonCharacter still calls this, but jumping is disabled by design (06_COMBAT.md). Delete the BP's jump nodes, then delete this. */
-	UFUNCTION(BlueprintCallable, Category="Input")
-	virtual void DoJumpStart();
-
-	/** Empty shim: see DoJumpStart */
-	UFUNCTION(BlueprintCallable, Category="Input")
-	virtual void DoJumpEnd();
-
 	/** Handles sprint start inputs from either controls or UI interfaces */
 	UFUNCTION(BlueprintCallable, Category="Input")
 	virtual void DoSprintStart();

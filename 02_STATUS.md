@@ -6,7 +6,7 @@
 > lives in git log; the why of past choices lives in 03_DECISIONS.md; engine gotchas live
 > in 11_ENGINE_NOTES.md. When updating, replace stale facts instead of appending below them.
 
-## Phase: Step 2 — First-Person Movement (prone + transitions + F6 + dive-into-prone + headbob + locomotion all feel-checked; zone transit times are the resume point)
+## Phase: Step 3 — One MG (Step 2 movement complete; zone transit times deferred with fog until after base systems, user decision 2026-07-18)
 
 All grey-box geometry is placed. Fog and the zone-size walkthrough are DEFERRED until after
 more system work (user decision 2026-07-04) — pick them up before tuning zone sizes.
@@ -28,8 +28,8 @@ more system work (user decision 2026-07-04) — pick them up before tuning zone 
 
 ### Code (Source/BreakingWave/)
 - [x] BreakingWaveCharacter — first-person character on the UE5 FP template: walk 600 /
-  sprint 900 (Shift), no jumping by design (DoJumpStart/DoJumpEnd are empty shims until the
-  BP's touch-UI jump nodes are deleted in-editor)
+  sprint 900 (Shift), no jumping by design (BP touch-UI jump nodes deleted in-editor and
+  the DoJumpStart/DoJumpEnd shims removed 2026-07-18)
 - [x] Prone (Decisions 023 + 025): C toggle, rides engine crouch (instant capsule shrink,
   clearance check on stand-up), camera at ProneEyeHeight above ground. STATIONARY by
   design — movement input ignored while prone and during transitions; look stays live.
@@ -127,21 +127,23 @@ more system work (user decision 2026-07-04) — pick them up before tuning zone 
 
 ## Next Steps
 
-- [ ] **RESUME HERE — Step 2**: Run through each zone and record transit times in
-  05_ZONES.md. Note: fog is still deferred and fog is load-bearing for judging
-  distances — treat these transit times as provisional until fog is in
-- [ ] Editor cleanup while in the BP anyway: delete BP_FirstPersonCharacter's touch-UI jump
-  nodes, then delete the DoJumpStart/DoJumpEnd shims in BreakingWaveCharacter
+- [ ] **RESUME HERE — Step 3, One MG**: place one MG actor in a bunker, then the MG
+  targeting system as one manager ticking state structs (Decision 021): priority-based
+  target selection, rotation speed limit, factor-based accuracy, and the stops
+  (reload 2–3 s, overheat 4–6 s, jam 2–8 s random). Then run the beach and feel-check.
+  Read 08_ENEMY_AI.md + 06_COMBAT.md first
 
 ### Writing backlog
 - [ ] Second character ("the one who shook me") narrative writing
 - [ ] First enemy character narrative writing
 
-### Deferred until after more system work (decided 2026-07-04)
+### Deferred until after more system work (decided 2026-07-04; transit times added 2026-07-18)
 - [ ] Fog setup — do this before judging zone sizes; fog is load-bearing.
   ExponentialHeightFog, tune by eye for ~35 m visibility: Density ~0.5,
   Height Falloff ~0.05, Start Distance ~500
 - [ ] Walk through the grey-box and judge zone sizes; adjust the heightmap Profile table if needed
+- [ ] Run through each zone and record transit times in 05_ZONES.md (Step 2's last open
+  item) — do together with the fog walkthrough so the times aren't measured twice
 - [ ] Clean up duplicate Landscape parent actors: the level has three (`Landscape`,
   `Landscape2`, `Landscape4`, all at −50400/−50400) — re-import leftovers. Check in the
   editor which one owns the 64 streaming proxies and delete the empty ones
@@ -163,3 +165,7 @@ so world = profile-meters × 100 − 50400 on both axes. Profile coords below wi
   state from MM_Idle to Idle_Rifle_Hip_UE5 headless (anim-graph node edited via
   load_object subobject path + node struct property + compile_blueprint — technique
   recorded in 11_ENGINE_NOTES.md), disk-verified. Feel-checked PASSED same day
+- Jump removal finished: user deleted BP_FirstPersonCharacter's touch-UI jump nodes,
+  DoJumpStart/DoJumpEnd shims removed from BreakingWaveCharacter, build verified
+- Zone transit times deferred to the fog walkthrough (user decision) — Step 2 closed,
+  Step 3 (One MG) is next

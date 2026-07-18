@@ -155,14 +155,6 @@ bool ABreakingWaveCharacter::IsProneTransitionActive() const
 	return GetWorld()->GetTimeSeconds() < ProneTransitionEndTime;
 }
 
-void ABreakingWaveCharacter::DoJumpStart()
-{
-}
-
-void ABreakingWaveCharacter::DoJumpEnd()
-{
-}
-
 void ABreakingWaveCharacter::DoProneToggle()
 {
 	if (bIsCrouched)
