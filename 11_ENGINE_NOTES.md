@@ -67,9 +67,16 @@ weirdness. Each entry cost a failed session or a failed feel-check; none of it i
   walk anims (Walk_*_Rifle are all ironsights).
 - ABP_FP_Copy (first-person view) has no anim dependencies — it copy-poses from the body
   mesh + CtrlRig_FPWarp, so body-ABP anim fixes show up in first person automatically.
-- ABP_Unarmed's standing Idle state plays MM_Idle directly, outside BS_Idle_Walk_Run — the
-  blendspace idle sample only shows while moving slowly; changing the standing idle means
-  editing the ABP's Idle state.
+- ABP_Unarmed's standing Idle state plays a direct sequence player, outside
+  BS_Idle_Walk_Run — the blendspace idle sample only shows while moving slowly. It now
+  plays Idle_Rifle_Hip_UE5 (was MM_Idle; Tools/SetRifleStandingIdle.py, 2026-07-18).
+- **Anim-graph nodes ARE editable headless** (`-run=pythonscript`): load the node by its
+  subobject path (find it via T3D export, e.g.
+  `ABP_Unarmed.ABP_Unarmed:AnimGraph.AnimGraphNode_StateMachine_0.Locomotion.AnimStateNode_1.Idle.AnimGraphNode_SequencePlayer_1`)
+  with `unreal.load_object(None, path)`, get the `node` struct property, set its
+  `sequence`, write the struct back, then `BlueprintEditorLibrary.compile_blueprint` +
+  save. Edit only nodes under `:AnimGraph...` — the duplicate graphs under
+  `ExecuteUbergraph_*` in the T3D are compiled artifacts that regenerate on compile.
 
 ## Rendering / camera / input (C++)
 

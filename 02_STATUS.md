@@ -1,12 +1,12 @@
 # Current Status
 
-> Last updated: 2026-07-17
+> Last updated: 2026-07-18
 >
 > This document holds the CURRENT state and what's next — nothing else. Session history
 > lives in git log; the why of past choices lives in 03_DECISIONS.md; engine gotchas live
 > in 11_ENGINE_NOTES.md. When updating, replace stale facts instead of appending below them.
 
-## Phase: Step 2 — First-Person Movement (prone + transitions + F6 + dive-into-prone done; headbob BUILT, feel-check is the resume point)
+## Phase: Step 2 — First-Person Movement (prone + transitions + F6 + dive-into-prone + headbob + locomotion all feel-checked; zone transit times are the resume point)
 
 All grey-box geometry is placed. Fog and the zone-size walkthrough are DEFERRED until after
 more system work (user decision 2026-07-04) — pick them up before tuning zone sizes.
@@ -67,15 +67,17 @@ more system work (user decision 2026-07-04) — pick them up before tuning zone 
   0.35 Hz); prone = breathing × 0.4; airborne/slide/prone-transition/F6 = still (those
   states own the camera). Amplitudes ease over SmoothingTime (0.2 s) — no pops. Knobs in
   FHeadbobSettings on the character (Category "Camera"). ALL NUMBERS TENTATIVE.
-  Feel-check PENDING. Tuning note: the FP camera rides the head socket, so anims already
-  add real head motion — if the bob reads weak, raise Walk/SprintAmplitude first
+  Feel-checked PASSED 2026-07-18. Tuning note: the FP camera rides the head socket, so
+  anims already add real head motion — if the bob ever reads weak, raise
+  Walk/SprintAmplitude first
 - [x] Locomotion: BS_Idle_Walk_Run rebuilt ALL-RIFLE with foot-true rates (idle rifle;
   300 = jogs ~1.05; 600 fwd = sprint anim ~0.97 — our normal speed is genuinely a run;
   900 fwd = sprint ~1.46; non-fwd = jogs rate-scaled 2.1×/3.2×, may read frantic — rate
   vs foot-slide tradeoff, constants in Tools/RebuildLocomotionAsRifle.py). ik_* bones
-  baked (the "legs not moving" fix — see 11_ENGINE_NOTES.md). Feel-check PENDING.
-  Known gap: the standing idle is the ABP's separate unarmed MM_Idle state, not the
-  blendspace rifle idle
+  baked (the "legs not moving" fix — see 11_ENGINE_NOTES.md). Feel-checked PASSED
+  2026-07-18. Standing idle gap CLOSED same day: ABP_Unarmed's Idle state repointed
+  from unarmed MM_Idle to Idle_Rifle_Hip_UE5 (Tools/SetRifleStandingIdle.py,
+  disk-verified) — the whole locomotion set is now rifle-carry
 - [x] BreakingWaveCameraManager — pitch-limited camera manager stub
 - [x] BreakingWaveGameMode / PlayerController — base classes
 
@@ -104,6 +106,10 @@ more system work (user decision 2026-07-04) — pick them up before tuning zone 
 - [x] Tools/BakeIKBonesFromFK.py — bakes FK transforms onto the ik_* helper bones in every
   Retarget anim; **MUST re-run after any new IK retarget** (see 11_ENGINE_NOTES.md);
   idempotent, headless OK (already run on all 14 anims, disk-verified)
+- [x] Tools/SetRifleStandingIdle.py — repoints ABP_Unarmed's standing Idle state node
+  (Locomotion → Idle → AnimGraphNode_SequencePlayer_1) from MM_Idle to
+  Idle_Rifle_Hip_UE5, recompiles + saves the ABP; idempotent, headless OK (already run,
+  disk-verified)
 - [x] Source/BreakingWave/BlendSpaceTool.* — editor-only C++ for headless blendspace work:
   RebuildRuntimeTriangulation, DescribeRuntimeTriangulation, DescribeBlendOutputAt
   (evaluates blends exactly like the runtime — verify without PIE)
@@ -121,23 +127,9 @@ more system work (user decision 2026-07-04) — pick them up before tuning zone 
 
 ## Next Steps
 
-- [ ] **RESUME HERE — Step 2 continues**:
-  1. FEEL-CHECK the headbob (built 2026-07-17, Decision 026): PIE. W then Shift+W —
-     cadence and amplitude should visibly differ and read as footfalls against the FP
-     arm swing; release W — camera should settle into faint breathing, no pop; C while
-     sprinting — bob must go silent for the whole dive/slide/transition (the arc is the
-     motion), then near-still breathing while prone; F6 debug orbit must be bob-free.
-     Watch for: lateral figure-8 queasiness (fallback = LateralRatio 0), frequency
-     mismatch with the visible arm-swing cadence (retune Walk/SprintFrequency), bob too
-     strong/weak (Walk/SprintAmplitude). All knobs in FHeadbobSettings on the character
-  2. RE-feel-check the all-rifle locomotion if not yet done (assets last changed
-     2026-07-12, frozen-legs fix — restart the editor first if it hasn't been since):
-     W (600) = rifle-carry run, feet matching ground; Shift+W (900) same anim at ~1.46;
-     strafe/backpedal may read frantic (rate-scaled 2.1×/3.2× — lower the rates in
-     RebuildLocomotionAsRifle.py accepting foot slide if so). Standing idle is still
-     the ABP's separate unarmed MM_Idle state — making it carry the rifle means editing
-     ABP_Unarmed's Idle state
-- [ ] **Step 2**: Run through each zone and record transit times in 05_ZONES.md
+- [ ] **RESUME HERE — Step 2**: Run through each zone and record transit times in
+  05_ZONES.md. Note: fog is still deferred and fog is load-bearing for judging
+  distances — treat these transit times as provisional until fog is in
 - [ ] Editor cleanup while in the BP anyway: delete BP_FirstPersonCharacter's touch-UI jump
   nodes, then delete the DoJumpStart/DoJumpEnd shims in BreakingWaveCharacter
 
@@ -162,13 +154,12 @@ so world = profile-meters × 100 − 50400 on both axes. Profile coords below wi
 - Landing craft (Zone 0, ramp faces +Y inland): A-left 230/270 (−27400, −23400), B-center 510/270 (600, −23400), C-right 790/270 (28600, −23400)
 - Bunkers (Zone 4, slit faces −Y sea): MG-left 200/620 (−30400, 11600), command 510/635 (600, 13100), MG-right 800/620 (29600, 11600)
 
-## What Was Done (last session — 2026-07-17)
+## What Was Done (last session — 2026-07-18)
 
-- Dive-into-prone feel-check closed by the user: good enough to build on, polish deferred
-- Headbob built (Decision 026): spec grilled question-by-question and agreed before any
-  code; custom camera-shake pattern, speed-synced, state-gated, smoothed. First PIE run
-  felt like nothing — GetViewTarget() had returned the PlayerController so the pattern
-  output zero; fixed to GetViewTargetPawn() (gotcha recorded in 11_ENGINE_NOTES.md).
-  Feel-check pending
-- Docs restructured: session history older than the last session pruned from this file
-  (git log owns it), durable engine gotchas extracted to 11_ENGINE_NOTES.md
+- Headbob feel-check PASSED as built — no knob changes needed (numbers stay tentative)
+- All-rifle locomotion feel-check PASSED (first check since the 2026-07-12 frozen-legs
+  fix)
+- Standing-idle gap closed: Tools/SetRifleStandingIdle.py repointed ABP_Unarmed's Idle
+  state from MM_Idle to Idle_Rifle_Hip_UE5 headless (anim-graph node edited via
+  load_object subobject path + node struct property + compile_blueprint — technique
+  recorded in 11_ENGINE_NOTES.md), disk-verified. Feel-checked PASSED same day
