@@ -52,15 +52,15 @@ Legend: `[x]` done · `[~]` partially done · `[ ]` not started.
 ## Step 3 — One MG
 > Goal: Feel "run and die."
 
-- [ ] Place one MG Actor in a bunker
-- [ ] Implement MG targeting system (manager + state struct, Decision 021)
-  - [ ] Priority-based target selection
-  - [ ] Rotation speed limit
-  - [ ] Factor-based accuracy
-- [ ] Implement MG stops
-  - [ ] Reload (2–3 seconds)
-  - [ ] Overheat (4–6 seconds)
-  - [ ] Jam (2–8 seconds random)
+- [ ] Place one MG Actor in a bunker — Tools/PlaceMGCrew.py written 2026-07-19, run it in-editor
+- [x] Implement MG targeting system (manager + state struct, Decision 021) — built 2026-07-19 w/ crewed gun + ally sim (Decisions 027–031)
+  - [x] Priority-based target selection
+  - [x] Rotation speed limit
+  - [x] Factor-based accuracy
+- [x] Implement MG stops — simulated from belt/heat, crew-tier multipliers (Decision 028)
+  - [x] Reload (2–3 seconds)
+  - [x] Overheat (4–6 seconds)
+  - [x] Jam (2–8 seconds random)
 - [ ] Run the beach yourself and test
   - [ ] How often do you get hit while running?
   - [ ] How long can you survive hiding in a crater?

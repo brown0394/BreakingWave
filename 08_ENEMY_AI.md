@@ -15,6 +15,45 @@ And these people die too. These people can become the player.
 - 3 bunkers (left MG, center command, right MG)
 - Fixed placement in Zone 4. Fire coverage spans all of Zones 0–3.
 - "Environmental threat" — firepower falling like rain. Doesn't precisely track individuals, but switches targets based on priority.
+- The MG is a crewed weapon, not a turret (Decision 027). A person aims it, people feed it, and killing them is how it dies.
+
+### The Crew — 6-Man Garrison (Decision 027)
+
+Each MG bunker is manned by 6 (historical heavy-MG squad). Only the active pair is rendered —
+gunner at the gun, loader beside him; the rest are an unrendered reserve inside the bunker.
+
+- A crew death → takeover delay (the next man moves up) → the gun resumes. Silence windows
+  escalate as the pool drains.
+- Crew count drives stop-duration multipliers:
+
+| Crew alive | Effect |
+|-----------|--------|
+| 6–4 | Normal — dedicated loader, belts prepped |
+| 3–2 | Reloads slower — ammo bearers dead, someone has to fetch |
+| 1 | Reload AND barrel change much slower — solo gunner does everything |
+| 0 | Silent forever |
+
+- Bunker-crew AI is its own system, separate from field infantry.
+- The center command bunker has no MG; its garrison is out of scope for this system.
+
+### Perception — What the Gunner Actually Sees (Decision 031)
+
+Per potential target, a visibility score:
+
+**visibility = exposure × attention × distance**
+
+- **Exposure fraction** — LOS traces from the muzzle to ~3 body points (head, chest, pelvis).
+  0 = in cover, partial = peeking, 1 = fully exposed. Exposure crossing from 0 to positive is
+  the "just broke cover" edge trigger.
+- **Off-axis attention falloff** — vision is sharpest along the current muzzle direction and
+  fades toward the edges of the slit arc (hard limit). Off the gun's axis, you are genuinely
+  unseen — flanking works.
+- **Distance factor** — closer is easier to notice; fog caps the whole thing.
+
+Score over threshold → target enters the gunner's **awareness set**, with a short memory after
+sight is lost (he suppresses the crater you ducked into, then forgets). The priority ladder
+ranks only the awareness set. Evaluation runs every 0.3–0.5 s — that tick IS the gunner's
+reaction time.
 
 ### Priority-Based Targeting
 
@@ -60,20 +99,27 @@ Not pure random — situational factors influence accuracy.
 → "Staying still lets the MG acquire you and get accurate" = stop and die
 → "Running makes you harder to hit but exposes you" = must run, but it's dangerous
 
-### MG Stops — Three Types
+### MG Stops — Simulated, Not Rolled (Decision 028)
 
-The MG can't fire continuously. Interruptions occur, each feeling different.
+The MG can't fire continuously. Stops come from real state the struct tracks — rounds left in
+the belt and barrel heat — not from random timers.
 
-| Type | Duration | Frequency | Sound |
-|------|----------|-----------|-------|
-| **Reload** (belt change) | 2–3 seconds | Common | Belt ejecting, new belt locking in, charging handle |
-| **Overheat** (barrel change) | 4–6 seconds | Rare | Hissing overheat sound, barrel removal/insertion |
-| **Jam** | 2–8 seconds (random) | Rare | Failed firing attempt, frustrated sounds, manipulation noise |
+| Type | Cause | Duration (full crew) | Sound |
+|------|-------|---------------------|-------|
+| **Reload** (belt change) | Belt runs empty | 2–3 seconds | Belt ejecting, new belt locking in, charging handle |
+| **Overheat** (barrel change) | Heat crosses threshold | 4–6 seconds | Hissing overheat sound, barrel removal/insertion |
+| **Jam** | Small random chance per burst | 2–8 seconds (random) | Failed firing attempt, frustrated sounds, manipulation noise |
 
-- All three types have different probability and timing, so "how long will it stop this time?" is unpredictable
-- This uncertainty creates the gamble: "should I run now?"
-- Each bunker has independent stops — one reloading while the other two fire
+- Firing decrements the belt and builds heat; pauses cool the barrel. Burst discipline
+  emerges from heat tuning, not scripted burst lengths.
+- Durations scale with the crew-tier multipliers (Decision 027) — fewer hands, longer silences.
+- "How long will it stop this time?" stays unpredictable because the causes interleave —
+  this uncertainty creates the gamble: "should I run now?"
+- Each bunker has independent belts, heat, and crew — one reloading while the other two fire
 - All three bunkers stopping simultaneously is extremely rare, but when it happens, major opportunity for the player
+- Sound design note (later pass): state-change audio arrives delayed by distance ÷ speed of
+  sound; a bullet passing near the player's head snaps a supersonic **crack**, the muzzle
+  **thump** arrives later — the crack–thump gap reads distance with no UI (Decision 030)
 
 ### Bunker Independence
 
@@ -197,12 +243,19 @@ Detailed Allied NPC AI is covered in 09_ALLY_NPC.md.
 Data-oriented per Decision 021: managers tick arrays of state structs; actors are visual shells.
 
 ### MG AI
-- One MG system holds an array of 3 MG state structs (current target, priority score, yaw, rotation state, stop state)
-- Update loop per bunker: evaluate target → rotate → fire → check for stop
-- Priority evaluation every 0.3–0.5 seconds (not every frame)
-- Rotation: Lerp MG mesh Yaw at max rotation speed
-- Stops: random timer + type selection → pause firing for that duration
-- Bunker actors only carry mesh, muzzle flash, and audio
+- One MG system holds an array of 3 MG state structs (crew count + takeover timer, belt rounds,
+  barrel heat, stop state, current target, aim yaw/pitch, rotation state, per-target awareness)
+- Update loop per bunker: perceive (0.3–0.5 s tick) → pick target from awareness set → rotate → fire → belt/heat bookkeeping
+- Rotation: Lerp aim yaw at max rotation speed with slight random variance; accuracy penalized mid-rotation
+- Stops: belt empty → reload; heat threshold → barrel change; random per-burst jam. Durations × crew-tier multiplier (Decisions 027/028)
+- Bullets: flat array of projectile structs, segment trace per tick, real travel time (Decision 030) —
+  they kill sim allies, hit the player, or land in the sand
+- Bunker actors only carry gun mesh, crew visual shells, muzzle flash, and audio
+- The allied wave is an unrendered simulation from Step 3 (Decision 029): ally structs advance,
+  wander, pause prone, and die to MG fire — the MG's perception/priority pipeline runs against
+  them plus the player, so the gun is never idle and its attention shifts organically
+- Dev-only exec commands: `MGNoDamage` (player immune, for observation), `MGKillCrew` (test
+  takeover windows and degradation before the player can shoot), `MGDebug` (state readout)
 
 ### Infantry AI
 - One infantry system ticks an array of soldier state structs; soldier actors carry mesh, animation, and ragdoll
@@ -216,7 +269,7 @@ Data-oriented per Decision 021: managers tick arrays of state structs; actors ar
 ## Open Questions
 
 - [ ] MG max rotation speed value — tune in prototype
-- [ ] MG stop probability distribution — tune through testing
+- [ ] Belt size / heat-per-shot / cooling rate / jam chance / crew-tier multipliers — tune through testing
 - [ ] Infantry count finalized (Zone 3: ~7 is tentative)
 - [ ] Infantry aiming time value — tune through testing
 - [ ] Infantry inter-position movement frequency and condition details

@@ -15,6 +15,8 @@
 #include "Camera/PlayerCameraManager.h"
 #include "HeadbobCameraShake.h"
 #include "TimerManager.h"
+#include "EngineUtils.h"
+#include "MGBunkerSystem.h"
 #include "BreakingWave.h"
 
 ABreakingWaveCharacter::ABreakingWaveCharacter()
@@ -375,6 +377,33 @@ void ABreakingWaveCharacter::DebugThirdPerson()
 		: EFirstPersonPrimitiveType::WorldSpaceRepresentation);
 	GetMesh()->SetOwnerNoSee(!bDebugThirdPersonViewActive);
 	FirstPersonMesh->SetOwnerNoSee(bDebugThirdPersonViewActive);
+}
+
+void ABreakingWaveCharacter::MGNoDamage()
+{
+	for (TActorIterator<AMGBunkerManager> It(GetWorld()); It; ++It)
+	{
+		It->ToggleNoDamage();
+		return;
+	}
+}
+
+void ABreakingWaveCharacter::MGKillCrew()
+{
+	for (TActorIterator<AMGBunkerManager> It(GetWorld()); It; ++It)
+	{
+		It->KillGunCrewMember();
+		return;
+	}
+}
+
+void ABreakingWaveCharacter::MGDebug()
+{
+	for (TActorIterator<AMGBunkerManager> It(GetWorld()); It; ++It)
+	{
+		It->ToggleDebug();
+		return;
+	}
 }
 
 void ABreakingWaveCharacter::DoSprintStart()

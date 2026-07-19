@@ -235,6 +235,18 @@ public:
 	UFUNCTION(Exec)
 	void DebugThirdPerson();
 
+	/** Console command: toggles MG bullet damage to the player off/on (observation mode) */
+	UFUNCTION(Exec)
+	void MGNoDamage();
+
+	/** Console command: kills the man on the gun of the first manned bunker (tests takeover windows and crew degradation) */
+	UFUNCTION(Exec)
+	void MGKillCrew();
+
+	/** Console command: toggles the MG/ally-sim debug readout (F7) */
+	UFUNCTION(Exec)
+	void MGDebug();
+
 	/** Prone is implemented on the engine crouch machinery; crouched means prone */
 	bool IsProne() const { return bIsCrouched; }
 

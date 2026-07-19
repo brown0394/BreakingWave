@@ -1,12 +1,18 @@
 # Current Status
 
-> Last updated: 2026-07-18
+> Last updated: 2026-07-19
 >
 > This document holds the CURRENT state and what's next — nothing else. Session history
 > lives in git log; the why of past choices lives in 03_DECISIONS.md; engine gotchas live
 > in 11_ENGINE_NOTES.md. When updating, replace stale facts instead of appending below them.
 
-## Phase: Step 3 — One MG (Step 2 movement complete; zone transit times deferred with fog until after base systems, user decision 2026-07-18)
+## Phase: Step 3 — One MG (systems BUILT 2026-07-19; placement script + feel-check pending)
+
+Spec was /grill-me'd question-by-question 2026-07-19 → Decisions 027–031. Step 3 scaffolding
+choices (not durable decisions): any MG hit = bare respawn at the landing craft (Step 4
+replaces this — remember the MG reads ~2× more lethal than the final two-shot model),
+`MGNoDamage` exec for observation, silence itself signals stops (per-type stop sounds wait
+for the sound pass).
 
 All grey-box geometry is placed. Fog and the zone-size walkthrough are DEFERRED until after
 more system work (user decision 2026-07-04) — pick them up before tuning zone sizes.
@@ -80,6 +86,22 @@ more system work (user decision 2026-07-04) — pick them up before tuning zone 
   disk-verified) — the whole locomotion set is now rifle-carry
 - [x] BreakingWaveCameraManager — pitch-limited camera manager stub
 - [x] BreakingWaveGameMode / PlayerController — base classes
+- [x] MG bunker system (MGBunkerSystem.h/.cpp, Decisions 027–031): AMGBunkerManager ticks
+  bunker state structs — 6-man crew w/ takeover + degradation tiers, belt/heat-simulated
+  stops + random jam, perception (3-point exposure × muzzle-axis attention × distance →
+  awareness w/ 4 s memory), priority ladder w/ broke-cover bonus + switch margin, rotation
+  speed limit w/ per-switch jitter, idle scan when unaware of everyone, factor-scaled
+  dispersion, projectile bullet array (real travel time; kills sim allies, respawns player,
+  sand-impact + tracer debug draw), flyby crack + distance-delayed fire-loop audio.
+  AMGBunkerGun is the visual shell (barrel, muzzle, 2 crew mannequins, audio comp).
+  ALL NUMBERS TENTATIVE in FMGSettings on the manager. Exec: MGNoDamage, MGKillCrew,
+  MGDebug (F7)
+- [x] Ally simulation (BeachAllySim.h/.cpp, Decision 029): AAllySimManager ticks unrendered
+  ally structs — spawn near craft, advance w/ wander, random prone pauses, die to MG fire,
+  slot reuse w/ generation counter. Struct shaped for the later full 09_ALLY_NPC.md
+  behavior; visual shells come in the ally step. Knobs in FAllySimSettings
+- [x] Placeholder audio: /Game/Audio/MGFireLoop (looping, synthesized) + MGCrack,
+  disk-verified; regenerate via Tools/GenerateMGPlaceholderAudio.py (headless OK)
 
 ### Tools
 - [x] Tools/GenerateBeachHeightmap.ps1 — generates the zone-profiled heightmap
@@ -113,6 +135,11 @@ more system work (user decision 2026-07-04) — pick them up before tuning zone 
 - [x] Source/BreakingWave/BlendSpaceTool.* — editor-only C++ for headless blendspace work:
   RebuildRuntimeTriangulation, DescribeRuntimeTriangulation, DescribeBlendOutputAt
   (evaluates blends exactly like the runtime — verify without PIE)
+- [x] Tools/GenerateMGPlaceholderAudio.py — synthesizes + imports the MG fire loop and
+  supersonic crack WAVs; idempotent, headless OK (already run, disk-verified)
+- [x] Tools/PlaceMGCrew.py — spawns MGBunkerGun into Bunker_MG_Right (barrel through slit,
+  crew mannequins, sounds wired) + the two manager actors; idempotent (MGSystem tag);
+  EDITOR-ONLY (spawning crashes headless) — NOT YET RUN
 
 ### Level
 - [x] Beach heightmap imported at scale 100/100/200 (Decision 022) — zone-profiled terrain
@@ -127,11 +154,26 @@ more system work (user decision 2026-07-04) — pick them up before tuning zone 
 
 ## Next Steps
 
-- [ ] **RESUME HERE — Step 3, One MG**: place one MG actor in a bunker, then the MG
-  targeting system as one manager ticking state structs (Decision 021): priority-based
-  target selection, rotation speed limit, factor-based accuracy, and the stops
-  (reload 2–3 s, overheat 4–6 s, jam 2–8 s random). Then run the beach and feel-check.
-  Read 08_ENEMY_AI.md + 06_COMBAT.md first
+- [ ] **RESUME HERE — Step 3 placement + feel-check** (session ended 2026-07-19 with code
+  built/compiled/verified but NOTHING placed or play-tested yet — the MG has never fired):
+  1. Open Lvl_FirstPerson → Tools > Execute Python Script > `Tools/PlaceMGCrew.py`
+     (spawns the gun into Bunker_MG_Right with barrel through the slit, gunner + loader
+     mannequins, sounds wired, plus the MGBunkerManager and AllySimManager actors)
+  2. Check the spawn looks right in the viewport (barrel through the slit, crew standing
+     on the ground inside) — the slit-height math is untested; if it's off, tweak the
+     constants at the top of PlaceMGCrew.py and re-run (idempotent)
+  3. **Save the level** (the spawned actors are not saved until you do)
+  4. Hit Play, run the beach, answer the 10_CHECKLIST.md Step 3 questions: hit frequency
+     while running, crater survival time, advancing during stop windows, difficulty feel
+  5. Debug aids: **F7** = debug readout (aim line, crew/belt/heat/stop state, ally
+     capsules); console `MGNoDamage` = observe without dying, `MGKillCrew` = test takeover
+     windows + crew degradation tiers
+  6. Tune in the Details panel: FMGSettings on MGBunkerManager, FAllySimSettings on
+     AllySimManager (all numbers tentative). Record tuned values in 08_ENEMY_AI.md when
+     it feels right, per the checklist
+  Greybox caveats: tracers converge on invisible sim allies (fog + rendered allies fix
+  that later — don't judge it now); any hit = instant respawn scaffolding, so the MG reads
+  ~2× more lethal than the final two-shot model — discount accordingly when tuning
 
 ### Writing backlog
 - [ ] Second character ("the one who shook me") narrative writing
@@ -156,16 +198,12 @@ so world = profile-meters × 100 − 50400 on both axes. Profile coords below wi
 - Landing craft (Zone 0, ramp faces +Y inland): A-left 230/270 (−27400, −23400), B-center 510/270 (600, −23400), C-right 790/270 (28600, −23400)
 - Bunkers (Zone 4, slit faces −Y sea): MG-left 200/620 (−30400, 11600), command 510/635 (600, 13100), MG-right 800/620 (29600, 11600)
 
-## What Was Done (last session — 2026-07-18)
+## What Was Done (last session — 2026-07-19)
 
-- Headbob feel-check PASSED as built — no knob changes needed (numbers stay tentative)
-- All-rifle locomotion feel-check PASSED (first check since the 2026-07-12 frozen-legs
-  fix)
-- Standing-idle gap closed: Tools/SetRifleStandingIdle.py repointed ABP_Unarmed's Idle
-  state from MM_Idle to Idle_Rifle_Hip_UE5 headless (anim-graph node edited via
-  load_object subobject path + node struct property + compile_blueprint — technique
-  recorded in 11_ENGINE_NOTES.md), disk-verified. Feel-checked PASSED same day
-- Jump removal finished: user deleted BP_FirstPersonCharacter's touch-UI jump nodes,
-  DoJumpStart/DoJumpEnd shims removed from BreakingWaveCharacter, build verified
-- Zone transit times deferred to the fog walkthrough (user decision) — Step 2 closed,
-  Step 3 (One MG) is next
+- Step 3 spec grilled to consensus (user's preferred flow) → Decisions 027–031 logged,
+  08_ENEMY_AI.md rewritten (crew, perception, simulated stops, ally sim, exec commands)
+- MG bunker system + ally simulation + projectile bullets built (see Code above),
+  compiles clean, classes + CDO settings verified headless
+- Placeholder audio synthesized, imported, disk-verified (fire loop looping, crack)
+- F7 → MGDebug added to DefaultInput.ini DebugExecBindings
+- REMAINING: user runs Tools/PlaceMGCrew.py in-editor, saves level, feel-checks
