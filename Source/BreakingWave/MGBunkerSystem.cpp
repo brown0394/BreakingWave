@@ -33,6 +33,10 @@ AMGBunkerGun::AMGBunkerGun()
 	Muzzle = CreateDefaultSubobject<USceneComponent>(TEXT("Muzzle"));
 	Muzzle->SetupAttachment(Barrel);
 
+	FirePort = CreateDefaultSubobject<USceneComponent>(TEXT("FirePort"));
+	FirePort->SetupAttachment(Root);
+	FirePort->SetRelativeLocation(FVector(120.f, 0.f, 0.f));
+
 	GunnerMesh = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("GunnerMesh"));
 	GunnerMesh->SetupAttachment(Root);
 	GunnerMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
@@ -60,6 +64,11 @@ void AMGBunkerGun::SetAimAngles(float YawDegrees, float PitchDegrees)
 FVector AMGBunkerGun::GetMuzzleLocation() const
 {
 	return Muzzle->GetComponentLocation();
+}
+
+FVector AMGBunkerGun::GetFirePosition() const
+{
+	return FirePort->GetComponentLocation();
 }
 
 void AMGBunkerGun::SetRenderedCrewCount(int32 Count)
@@ -218,7 +227,7 @@ void AMGBunkerManager::UpdateBunker(FMGBunkerState& State, int32 BunkerIndex, fl
 void AMGBunkerManager::EvaluatePerception(FMGBunkerState& State)
 {
 	const float Now = GetWorld()->GetTimeSeconds();
-	const FVector MuzzlePos = State.Gun->GetMuzzleLocation();
+	const FVector MuzzlePos = State.Gun->GetFirePosition();
 	const int32 AllyCount = AllySim.IsValid() ? AllySim->GetAllies().Num() : 0;
 
 	for (int32 TargetId = -1; TargetId < AllyCount; ++TargetId)
@@ -313,7 +322,7 @@ float AMGBunkerManager::ComputeVisibility(const FMGBunkerState& State, const FVe
 float AMGBunkerManager::ScoreTarget(const FMGBunkerState& State, int32 TargetId, float Now) const
 {
 	const FMGAwareness& Aw = AwarenessFor(State, TargetId);
-	const float Distance = FVector::Dist(State.Gun->GetMuzzleLocation(), Aw.LastKnownPos);
+	const float Distance = FVector::Dist(State.Gun->GetFirePosition(), Aw.LastKnownPos);
 	const float DistNorm = FMath::Clamp(1.f - Distance / Settings.VisibilityMaxRange, 0.f, 1.f);
 
 	float Score;
@@ -384,7 +393,7 @@ void AMGBunkerManager::UpdateRotation(FMGBunkerState& State, float DeltaSeconds)
 		const FMGAwareness& Aw = AwarenessFor(State, State.CurrentTargetId);
 		const bool bLiveTrack = Aw.LastExposure > 0.f && IsTargetAlive(State.CurrentTargetId);
 		const FVector AimPos = bLiveTrack ? GetTargetPosition(State.CurrentTargetId) : Aw.LastKnownPos;
-		const FVector ToAim = AimPos - State.Gun->GetMuzzleLocation();
+		const FVector ToAim = AimPos - State.Gun->GetFirePosition();
 		State.TargetYaw = FMath::RadiansToDegrees(FMath::Atan2(ToAim.Y, ToAim.X));
 		State.TargetPitch = FMath::RadiansToDegrees(FMath::Atan2(ToAim.Z, ToAim.Size2D()));
 	}
@@ -479,7 +488,7 @@ void AMGBunkerManager::FireRound(FMGBunkerState& State, int32 BunkerIndex)
 	const FVector ShotDir = FMath::VRandCone(AimDir, FMath::DegreesToRadians(Dispersion));
 
 	FMGBullet Bullet;
-	Bullet.Position = State.Gun->GetMuzzleLocation();
+	Bullet.Position = State.Gun->GetFirePosition();
 	Bullet.Velocity = ShotDir * Settings.MuzzleVelocity;
 	Bullet.RemainingLife = Settings.BulletLifetime;
 	Bullet.SourceBunkerIndex = BunkerIndex;
@@ -694,7 +703,7 @@ void AMGBunkerManager::SyncFiringAudio(FMGBunkerState& State, bool bActuallyFiri
 	float Delay = 0.f;
 	if (const ABreakingWaveCharacter* Player = GetPlayerCharacter())
 	{
-		Delay = FVector::Dist(Player->GetActorLocation(), State.Gun->GetMuzzleLocation()) / Settings.SpeedOfSound;
+		Delay = FVector::Dist(Player->GetActorLocation(), State.Gun->GetFirePosition()) / Settings.SpeedOfSound;
 	}
 	State.Gun->SetFiringAudioState(bActuallyFiring, Delay);
 }
@@ -840,7 +849,7 @@ void AMGBunkerManager::DrawDebugState() const
 		{
 			continue;
 		}
-		const FVector Muzzle = State.Gun->GetMuzzleLocation();
+		const FVector Muzzle = State.Gun->GetFirePosition();
 		const FVector AimDir = FRotator(State.AimPitch, State.AimYaw, 0.f).Vector();
 		DrawDebugLine(GetWorld(), Muzzle, Muzzle + AimDir * 3000.f, FColor::Red, false, -1.f, 0, 2.f);
 

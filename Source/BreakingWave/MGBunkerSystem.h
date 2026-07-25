@@ -273,6 +273,11 @@ public:
 
 	FVector GetMuzzleLocation() const;
 
+	/** Fixed exterior firing point at the slit opening — does NOT rotate with the barrel.
+	    Perception and bullet spawn use this so aiming off-center never fires into the
+	    bunker's own walls (the visual Muzzle swings with the barrel and would). */
+	FVector GetFirePosition() const;
+
 	void SetRenderedCrewCount(int32 Count);
 
 	void SetFiringAudioState(bool bFiring, float DelaySeconds);
@@ -287,6 +292,9 @@ public:
 
 	UPROPERTY(VisibleAnywhere, Category = "Components")
 	USceneComponent* Muzzle;
+
+	UPROPERTY(VisibleAnywhere, Category = "Components")
+	USceneComponent* FirePort;
 
 	UPROPERTY(VisibleAnywhere, Category = "Components")
 	USkeletalMeshComponent* GunnerMesh;

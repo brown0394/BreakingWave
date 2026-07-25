@@ -95,7 +95,18 @@ more system work (user decision 2026-07-04) — pick them up before tuning zone 
   sand-impact + tracer debug draw), flyby crack + distance-delayed fire-loop audio.
   AMGBunkerGun is the visual shell (barrel, muzzle, 2 crew mannequins, audio comp).
   ALL NUMBERS TENTATIVE in FMGSettings on the manager. Exec: MGNoDamage, MGKillCrew,
-  MGDebug (F7)
+  MGDebug (F7). Fixed 2026-07-25 (first playtest bug): firing/perception/aim-targeting
+  now use a new fixed FirePort component (child of the actor root, never rotates)
+  instead of the visual Muzzle (child of the rotating Barrel/YawPivot) — the old code
+  fired and traced LOS from a point that swings on an arc around a pivot sitting deep
+  inside the bunker, so off-center aim (i.e. most of the time) put the muzzle back
+  behind the wall, shooting the bunker's own interior. FirePort sits at the same
+  rest-position math as before (120cm forward of root = BARREL_LENGTH_CM in
+  PlaceMGCrew.py) but stays fixed at the slit opening for every aim angle. Visual
+  Muzzle is now cosmetic only (barrel mesh tip, fire-loop audio position) — expected
+  to look slightly detached from the true fire point until the placeholder gun mesh
+  is replaced. Compiles clean, rebuilt via Build.bat and verified. Not yet re-tested
+  in PIE by the user.
 - [x] Ally simulation (BeachAllySim.h/.cpp, Decision 029): AAllySimManager ticks unrendered
   ally structs — spawn near craft, advance w/ wander, random prone pauses, die to MG fire,
   slot reuse w/ generation counter. Struct shaped for the later full 09_ALLY_NPC.md
