@@ -52,7 +52,12 @@
       "Bash(curl -s \"https://api.github.com/repos/mattpocock/skills/contents/skills/productivity/grilling\")",
       "Bash(mkdir -p \"/c/Users/user/Documents/Unreal Projects/BreakingWave/.claude/skills/grilling\")",
       "Bash(curl -s -o \"/c/Users/user/Documents/Unreal Projects/BreakingWave/.claude/skills/grilling/SKILL.md\" \"https://raw.githubusercontent.com/mattpocock/skills/main/skills/productivity/grilling/SKILL.md\")",
-      "PowerShell(& \"C:\\\\Program Files\\\\Epic Games\\\\UE_5.6\\\\Engine\\\\Build\\\\BatchFiles\\\\Build.bat\" BreakingWaveEditor Win64 Development -Project=\"C:\\\\Users\\\\user\\\\Documents\\\\Unreal Projects\\\\BreakingWave\\\\BreakingWave.uproject\" -WaitMutex | Select-Object -Last 15)"
+      "PowerShell(& \"C:\\\\Program Files\\\\Epic Games\\\\UE_5.6\\\\Engine\\\\Build\\\\BatchFiles\\\\Build.bat\" BreakingWaveEditor Win64 Development -Project=\"C:\\\\Users\\\\user\\\\Documents\\\\Unreal Projects\\\\BreakingWave\\\\BreakingWave.uproject\" -WaitMutex | Select-Object -Last 15)",
+      "PowerShell(& \"C:\\\\Program Files\\\\Epic Games\\\\UE_5.6\\\\Engine\\\\Build\\\\BatchFiles\\\\Build.bat\" BreakingWaveEditor Win64 Development -project=\"C:\\\\Users\\\\user\\\\Documents\\\\Unreal Projects\\\\BreakingWave\\\\BreakingWave.uproject\" -WaitMutex 2>&1 | Select-Object -Last 3)",
+      "Read(//c//**)",
+      "Bash(find \"/c\" -maxdepth 3 -iname \"UE_5*\")",
+      "Read(//c/Program Files/**)",
+      "PowerShell($proj = \\(Get-Location\\).Path + \"\\\\BreakingWave.uproject\"; & \"C:\\\\Program Files\\\\Epic Games\\\\UE_5.6\\\\Engine\\\\Build\\\\BatchFiles\\\\Build.bat\" BreakingWaveEditor Win64 Development -project=\"$proj\" -waitmutex 2>&1 | Select-Object -Last 100)"
     ]
   }
 }
