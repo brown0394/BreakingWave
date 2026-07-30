@@ -217,7 +217,7 @@ void AMGBunkerManager::UpdateBunker(FMGBunkerState& State, int32 BunkerIndex, fl
 	{
 		State.EvalTimer += Settings.EvaluationInterval;
 		EvaluatePerception(State);
-		SelectTarget(State, GetWorld()->GetTimeSeconds());
+		SelectTarget(State, BunkerIndex, GetWorld()->GetTimeSeconds());
 	}
 
 	UpdateRotation(State, DeltaSeconds);
@@ -329,6 +329,12 @@ float AMGBunkerManager::ScoreTarget(const FMGBunkerState& State, int32 TargetId,
 	if (Aw.LastExposure > 0.f)
 	{
 		Score = 100.f * Aw.LastExposure * (0.25f + 0.75f * DistNorm);
+		if (IsTargetAlive(TargetId))
+		{
+			const float GroundSpeed = GetTargetVelocity(TargetId).Size2D();
+			const float SpeedNorm = FMath::Clamp(GroundSpeed / Settings.MovingTargetScoreReferenceSpeed, 0.f, 1.f);
+			Score *= 1.f + Settings.MovingTargetScoreBonus * SpeedNorm;
+		}
 	}
 	else
 	{
@@ -344,9 +350,15 @@ float AMGBunkerManager::ScoreTarget(const FMGBunkerState& State, int32 TargetId,
 	return Score;
 }
 
-void AMGBunkerManager::SelectTarget(FMGBunkerState& State, float Now)
+void AMGBunkerManager::SelectTarget(FMGBunkerState& State, int32 BunkerIndex, float Now)
 {
 	const int32 AllyCount = AllySim.IsValid() ? AllySim->GetAllies().Num() : 0;
+
+	const auto EffectiveScore = [&](int32 TargetId)
+	{
+		const float Penalty = IsTargetedByAnotherGun(BunkerIndex, TargetId) ? Settings.SharedTargetScorePenalty : 1.f;
+		return ScoreTarget(State, TargetId, Now) * Penalty;
+	};
 
 	int32 BestId = NoTargetId;
 	float BestScore = 0.f;
@@ -356,7 +368,7 @@ void AMGBunkerManager::SelectTarget(FMGBunkerState& State, float Now)
 		{
 			continue;
 		}
-		const float Score = ScoreTarget(State, TargetId, Now);
+		const float Score = EffectiveScore(TargetId);
 		if (Score > BestScore)
 		{
 			BestScore = Score;
@@ -377,13 +389,29 @@ void AMGBunkerManager::SelectTarget(FMGBunkerState& State, float Now)
 
 	if (BestId != State.CurrentTargetId && BestId != NoTargetId)
 	{
-		const float CurrentScore = ScoreTarget(State, State.CurrentTargetId, Now);
+		const float CurrentScore = EffectiveScore(State.CurrentTargetId);
 		if (BestScore > CurrentScore * Settings.TargetSwitchMargin)
 		{
 			State.CurrentTargetId = BestId;
 			State.RotationSpeedJitter = FMath::FRandRange(1.f - Settings.RotationSpeedVariance, 1.f + Settings.RotationSpeedVariance);
 		}
 	}
+}
+
+bool AMGBunkerManager::IsTargetedByAnotherGun(int32 BunkerIndex, int32 TargetId) const
+{
+	for (int32 i = 0; i < Bunkers.Num(); ++i)
+	{
+		if (i == BunkerIndex || Bunkers[i].CrewAlive <= 0)
+		{
+			continue;
+		}
+		if (Bunkers[i].CurrentTargetId == TargetId)
+		{
+			return true;
+		}
+	}
+	return false;
 }
 
 void AMGBunkerManager::UpdateRotation(FMGBunkerState& State, float DeltaSeconds)

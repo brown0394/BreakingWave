@@ -12,8 +12,11 @@ And these people die too. These people can become the player.
 ## Bunker MG
 
 ### Overview
-- 3 bunkers (left MG, center command, right MG)
+- 3 MG bunkers (left, center, right), all manned (Decision 033)
 - Fixed placement in Zone 4. Fire coverage spans all of Zones 0–3.
+- The flank guns fire enfilade — toed in 30° toward the beach center (Decision 032) so their
+  slit arcs interlock: the overlap lane is the center, and each gun's own near frontage is
+  covered by the opposite gun. The center gun faces straight out to sea.
 - "Environmental threat" — firepower falling like rain. Doesn't precisely track individuals, but switches targets based on priority.
 - The MG is a crewed weapon, not a turret (Decision 027). A person aims it, people feed it, and killing them is how it dies.
 
@@ -34,7 +37,6 @@ gunner at the gun, loader beside him; the rest are an unrendered reserve inside 
 | 0 | Silent forever |
 
 - Bunker-crew AI is its own system, separate from field infantry.
-- The center command bunker has no MG; its garrison is out of scope for this system.
 
 ### Perception — What the Gunner Actually Sees (Decision 031)
 
@@ -71,6 +73,15 @@ The MG doesn't sweep left to right. The gunner judges and tracks the most danger
 - If a higher-priority target appears, switch from current target
 - On switch, rotate MG toward new target — this rotation time naturally creates a "window"
 - If a target goes back into cover, priority drops and MG switches to another target
+
+**Priority modifiers (Decision 033):**
+- **Movement draws the eye** — an exposed target's priority scales with ground speed:
+  a man sprinting up the beach outranks a nearer man lying still. Paired with the
+  accuracy factors below, this is the run-don't-stop gamble: running attracts fire but
+  is harder to hit; stopping makes you quiet, then dead.
+- **The battery spreads its fire** — a target another gun is already working scores
+  lower (a crude fire plan). The guns split the wave instead of converging on the same
+  front-runner, so nobody crosses free just because someone else is closer.
 
 ### MG Rotation Speed Limit
 

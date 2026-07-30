@@ -9,7 +9,7 @@ Fog-covered beach. Advance from bottom to top.
 [High Ground — Breach Objective]
 ─────────────────────────────────
 Zone 4: Defense Line
-  - MG Bunker (left), Command Bunker (center), MG Bunker (right)
+  - 3 MG Bunkers (left, center, right)
   - Connected by communication trenches
 ─────────────────────────────────
 Zone 3: Upper Beach
@@ -56,7 +56,7 @@ Allied forces shift from "advancing" to "fighting" here.
 **Enemy characters are playable in this zone and Zone 4.**
 
 ### Zone 4 — Defense Line (30~90 seconds)
-3 concrete bunkers. Left and right are MG bunkers, center is command bunker.
+3 concrete MG bunkers, all manned (Decision 033); the center one is larger.
 Communication trenches between bunkers allow troop movement.
 Breaching here reaches the high ground and ends the game.
 Longest and hardest zone.
@@ -104,7 +104,7 @@ If all candidates in a zone are dead, expand to adjacent zone candidates.
 
 ### German Character Pool
 Placed in Zones 3~4. People looking down at the beach.
-Trench infantry, foxhole riflemen, bunker MG gunners, command bunker officer.
+Trench infantry, foxhole riflemen, bunker MG gunners — ordinary soldiers, no officer story.
 If an Allied character's death narrative mentions "the person who shot me,"
 the next character can be German.
 

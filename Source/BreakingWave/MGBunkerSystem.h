@@ -186,6 +186,18 @@ struct FMGSettings
 	UPROPERTY(EditAnywhere, Category = "MG|Priority")
 	float TargetSwitchMargin = 1.2f;
 
+	/** Movement draws the gunner's eye: score scales up to (1 + this) at MovingTargetScoreReferenceSpeed */
+	UPROPERTY(EditAnywhere, Category = "MG|Priority")
+	float MovingTargetScoreBonus = 1.5f;
+
+	/** Ground speed (cm/s) earning the full moving-target bonus; player sprint is 900 */
+	UPROPERTY(EditAnywhere, Category = "MG|Priority")
+	float MovingTargetScoreReferenceSpeed = 900.f;
+
+	/** Score multiplier for a target another gun is already working — the pair spreads its fire instead of doubling up */
+	UPROPERTY(EditAnywhere, Category = "MG|Priority")
+	float SharedTargetScorePenalty = 0.5f;
+
 	/** Bullet passing within this range of the player's head snaps a supersonic crack */
 	UPROPERTY(EditAnywhere, Category = "MG|Audio")
 	float CrackRadius = 300.f;
@@ -351,7 +363,9 @@ private:
 
 	float ScoreTarget(const FMGBunkerState& State, int32 TargetId, float Now) const;
 
-	void SelectTarget(FMGBunkerState& State, float Now);
+	void SelectTarget(FMGBunkerState& State, int32 BunkerIndex, float Now);
+
+	bool IsTargetedByAnotherGun(int32 BunkerIndex, int32 TargetId) const;
 
 	void UpdateRotation(FMGBunkerState& State, float DeltaSeconds);
 

@@ -1,15 +1,20 @@
 # Places the Step 3 MG system into the open level (Lvl_FirstPerson):
-#   1 MGBunkerGun inside Bunker_MG_Right (barrel through the slit, gunner + loader mannequins)
-#   1 MGBunkerManager + 1 AllySimManager
+#   1 MGBunkerGun in each GUN_BUNKERS entry (barrel through the slit, gunner + loader
+#   mannequins) — all three bunkers manned since 2026-07-30 (Decision 033)
+#   1 MGBunkerManager + 1 AllySimManager (the manager auto-discovers every AMGBunkerGun
+#   in the world via TActorIterator at BeginPlay, so one manager drives both guns)
 #
 # Run from inside the UE editor: Tools menu > Execute Python Script... > pick this file.
 # (Actor spawning crashes headless — this one is editor-only, like PlaceHeroPieces.py.)
 #
 # Idempotent: everything is tagged MG_TAG; re-running deletes the previous batch first.
-# To man a different bunker, edit GUN_BUNKER below and re-run.
+# To man different/fewer bunkers, edit GUN_BUNKERS below and re-run.
 #
 # Geometry facts this script assumes (PlaceHeroPieces.py): bunker embed 0.5 m,
-# slit spans 1.2–1.6 m above the embedded base, MG bunkers are 5 m deep, slit faces -Y.
+# slit spans 1.2–1.6 m above the embedded base, slit faces -Y, depths per entry
+# (flank bunkers 5 m, center bunker 6 m).
+
+import math
 
 import unreal
 
@@ -17,12 +22,18 @@ M = 100.0
 MG_TAG = "MGSystem"
 FOLDER = "MGSystem"
 
-GUN_BUNKER = {"x": 800, "y": 620, "yaw": -90.0}
-BUNKER_DEPTH_M = 5.0
+# -90 faces straight out to sea; the 30-degree toe-in on the flanks interlocks their
+# 55-degree slit arcs over the center lane (enfilade fire — 08_ENEMY_AI.md: coverage
+# spans Zones 0-3). Drop the Center entry and re-run to A/B two guns vs three.
+GUN_BUNKERS = [
+    {"label": "Left",   "x": 200, "y": 620, "yaw": -60.0,  "depth_m": 5.0},
+    {"label": "Center", "x": 510, "y": 635, "yaw": -90.0,  "depth_m": 6.0},
+    {"label": "Right",  "x": 800, "y": 620, "yaw": -120.0, "depth_m": 5.0},
+]
 BUNKER_EMBED_M = 0.5
 SLIT_CENTER_Z_M = 1.4
 BARREL_LENGTH_CM = 120.0
-MUZZLE_SETBACK_FROM_CENTER_CM = 230.0
+FIRE_PORT_SLIT_CLEARANCE_CM = 2.0
 
 MANNY = "/Game/Characters/Mannequins/Meshes/SKM_Manny_Simple.SKM_Manny_Simple"
 CUBE = "/Game/LevelPrototyping/Meshes/SM_Cube.SM_Cube"
@@ -89,43 +100,56 @@ def main():
     removed = clear_previous(eas)
     bunker_pieces = [a for a in eas.get_all_level_actors() if a.actor_has_tag("GreyboxHero")]
 
-    cx = corner[0] + GUN_BUNKER["x"] * M
-    cy = corner[1] + GUN_BUNKER["y"] * M
-    gz = ground_z(world, cx, cy, bunker_pieces)
-    if gz is None:
-        unreal.log_error("No ground under the bunker position — is the landscape loaded?")
-        return
-
-    base_z = gz - BUNKER_EMBED_M * M
-    gun_z = base_z + SLIT_CENTER_Z_M * M
-    gun_y = cy - (MUZZLE_SETBACK_FROM_CENTER_CM - BARREL_LENGTH_CM)
-
-    gun = eas.spawn_actor_from_class(
-        unreal.MGBunkerGun, unreal.Vector(cx, gun_y, gun_z),
-        unreal.Rotator(0.0, 0.0, GUN_BUNKER["yaw"]))
-    register(gun, "MGBunkerGun_Right")
-
     cube = unreal.load_asset(CUBE)
-    barrel = gun.get_editor_property("barrel")
-    barrel.set_static_mesh(cube)
-    barrel.set_relative_scale3d(unreal.Vector(1.2, 0.12, 0.12))
-    barrel.set_relative_location(unreal.Vector(0.0, -6.0, -6.0), False, False)
-    gun.get_editor_property("muzzle").set_relative_location(
-        unreal.Vector(100.0, 50.0, 50.0), False, False)
-
     manny = unreal.load_asset(MANNY)
     idle = unreal.load_asset(CREW_IDLE)
-    for prop, rel in (("gunner_mesh", unreal.Vector(-80.0, 0.0, -SLIT_CENTER_Z_M * M + BUNKER_EMBED_M * M)),
-                      ("loader_mesh", unreal.Vector(-70.0, 90.0, -SLIT_CENTER_Z_M * M + BUNKER_EMBED_M * M))):
-        comp = gun.get_editor_property(prop)
-        comp.set_skeletal_mesh_asset(manny)
-        comp.set_relative_location(rel, False, False)
-        comp.set_relative_rotation(unreal.Rotator(0.0, 0.0, -90.0), False, False)
-        if idle is not None:
-            comp.override_animation_data(idle, True, True, 0.0, 1.0)
+    fire_loop = unreal.load_asset(FIRE_LOOP)
+    crack = unreal.load_asset(CRACK)
 
-    gun.set_editor_property("fire_loop_sound", unreal.load_asset(FIRE_LOOP))
-    gun.set_editor_property("crack_sound", unreal.load_asset(CRACK))
+    placed = []
+    for bunker in GUN_BUNKERS:
+        cx = corner[0] + bunker["x"] * M
+        cy = corner[1] + bunker["y"] * M
+        gz = ground_z(world, cx, cy, bunker_pieces)
+        if gz is None:
+            unreal.log_error("No ground under the %s bunker position — is the landscape loaded?" % bunker["label"])
+            continue
+
+        base_z = gz - BUNKER_EMBED_M * M
+        gun_z = base_z + SLIT_CENTER_Z_M * M
+        port_y = cy - bunker["depth_m"] / 2.0 * M - FIRE_PORT_SLIT_CLEARANCE_CM
+        yaw_rad = math.radians(bunker["yaw"])
+        gun_x = cx - BARREL_LENGTH_CM * math.cos(yaw_rad)
+        gun_y = port_y - BARREL_LENGTH_CM * math.sin(yaw_rad)
+
+        gun = eas.spawn_actor_from_class(
+            unreal.MGBunkerGun, unreal.Vector(gun_x, gun_y, gun_z),
+            unreal.Rotator(0.0, 0.0, bunker["yaw"]))
+        register(gun, "MGBunkerGun_%s" % bunker["label"])
+
+        barrel = gun.get_editor_property("barrel")
+        barrel.set_static_mesh(cube)
+        barrel.set_relative_scale3d(unreal.Vector(1.2, 0.12, 0.12))
+        barrel.set_relative_location(unreal.Vector(0.0, -6.0, -6.0), False, False)
+        gun.get_editor_property("muzzle").set_relative_location(
+            unreal.Vector(100.0, 50.0, 50.0), False, False)
+
+        for prop, rel in (("gunner_mesh", unreal.Vector(-80.0, 0.0, -SLIT_CENTER_Z_M * M + BUNKER_EMBED_M * M)),
+                          ("loader_mesh", unreal.Vector(-70.0, 90.0, -SLIT_CENTER_Z_M * M + BUNKER_EMBED_M * M))):
+            comp = gun.get_editor_property(prop)
+            comp.set_skeletal_mesh_asset(manny)
+            comp.set_relative_location(rel, False, False)
+            comp.set_relative_rotation(unreal.Rotator(0.0, 0.0, -90.0), False, False)
+            if idle is not None:
+                comp.override_animation_data(idle, True, True, 0.0, 1.0)
+
+        gun.set_editor_property("fire_loop_sound", fire_loop)
+        gun.set_editor_property("crack_sound", crack)
+        placed.append((bunker["label"], gun_x, gun_y, gun_z))
+
+    if not placed:
+        unreal.log_error("No guns placed — aborting before manager spawn.")
+        return
 
     manager = eas.spawn_actor_from_class(
         unreal.MGBunkerManager, unreal.Vector(0.0, 0.0, 0.0), unreal.Rotator(0.0, 0.0, 0.0))
@@ -135,8 +159,9 @@ def main():
         unreal.AllySimManager, unreal.Vector(0.0, 0.0, 0.0), unreal.Rotator(0.0, 0.0, 0.0))
     register(ally_sim, "AllySimManager")
 
-    unreal.log("MG system placed (cleared %d previous). Gun at (%.0f, %.0f, %.0f), muzzle through the MG-right slit."
-               % (removed, cx, gun_y, gun_z))
+    for label, gx, gy, gz in placed:
+        unreal.log("MG system placed (cleared %d previous). %s gun at (%.0f, %.0f, %.0f)."
+                   % (removed, label, gx, gy, gz))
 
 
 main()

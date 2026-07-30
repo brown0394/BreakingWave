@@ -1,6 +1,6 @@
 # Current Status
 
-> Last updated: 2026-07-19
+> Last updated: 2026-07-30
 >
 > This document holds the CURRENT state and what's next — nothing else. Session history
 > lives in git log; the why of past choices lives in 03_DECISIONS.md; engine gotchas live
@@ -21,7 +21,7 @@ more system work (user decision 2026-07-04) — pick them up before tuning zone 
 
 ### Documents
 - [x] Project mental model (01_SOUL.md)
-- [x] Decision log (03_DECISIONS.md) — 26 entries
+- [x] Decision log (03_DECISIONS.md) — 33 entries
 - [x] Design principles (04_PRINCIPLES.md) — 7 principles
 - [x] Beach map v2 (05_ZONES.md) — 5 zones, 3 bunkers, 3 infantry positions, comm trenches
 - [x] Combat system design (06_COMBAT.md) — controls, damage, cover, per-zone rhythm
@@ -105,8 +105,12 @@ more system work (user decision 2026-07-04) — pick them up before tuning zone 
   PlaceMGCrew.py) but stays fixed at the slit opening for every aim angle. Visual
   Muzzle is now cosmetic only (barrel mesh tip, fire-loop audio position) — expected
   to look slightly detached from the true fire point until the placeholder gun mesh
-  is replaced. Compiles clean, rebuilt via Build.bat and verified. Not yet re-tested
-  in PIE by the user.
+  is replaced. Compiles clean, rebuilt via Build.bat and verified. Priority reworked
+  2026-07-30 (Decision 033, after the hang-back exploit): exposed-target score now
+  scales with ground speed (MovingTargetScoreBonus / MovingTargetScoreReferenceSpeed —
+  a sprinter outranks a nearer prone man) and guns deprioritize targets another gun is
+  already working (SharedTargetScorePenalty — the battery splits the wave). Compiled
+  clean 2026-07-30; not yet play-tested.
 - [x] Ally simulation (BeachAllySim.h/.cpp, Decision 029): AAllySimManager ticks unrendered
   ally structs — spawn near craft, advance w/ wander, random prone pauses, die to MG fire,
   slot reuse w/ generation counter. Struct shaped for the later full 09_ALLY_NPC.md
@@ -148,9 +152,15 @@ more system work (user decision 2026-07-04) — pick them up before tuning zone 
   (evaluates blends exactly like the runtime — verify without PIE)
 - [x] Tools/GenerateMGPlaceholderAudio.py — synthesizes + imports the MG fire loop and
   supersonic crack WAVs; idempotent, headless OK (already run, disk-verified)
-- [x] Tools/PlaceMGCrew.py — spawns MGBunkerGun into Bunker_MG_Right (barrel through slit,
-  crew mannequins, sounds wired) + the two manager actors; idempotent (MGSystem tag);
-  EDITOR-ONLY (spawning crashes headless) — NOT YET RUN
+- [x] Tools/PlaceMGCrew.py — spawns an MGBunkerGun into every GUN_BUNKERS entry (barrel
+  through slit, crew mannequins, sounds wired) + the two manager actors. All THREE bunkers
+  manned since 2026-07-30 (Decision 033): flanks toed in 30° (yaw −60/−120, Decision 032
+  enfilade — arcs interlock over the center), center bunker sea-facing (−90, depth 6 m
+  handled per-entry); drop the Center entry and re-run to A/B two guns vs three. Gun root
+  derived so the FirePort sits just outside the slit plane at any yaw (arc-edge shots can't
+  clip the slit jambs). One MGBunkerManager drives all guns (auto-discovers at BeginPlay).
+  Idempotent (MGSystem tag); EDITOR-ONLY (spawning crashes headless). RE-RUN NEEDED to
+  place the center gun.
 
 ### Level
 - [x] Beach heightmap imported at scale 100/100/200 (Decision 022) — zone-profiled terrain
@@ -165,14 +175,19 @@ more system work (user decision 2026-07-04) — pick them up before tuning zone 
 
 ## Next Steps
 
-- [ ] **RESUME HERE — Step 3 placement + feel-check** (session ended 2026-07-19 with code
-  built/compiled/verified but NOTHING placed or play-tested yet — the MG has never fired):
+- [ ] **RESUME HERE — re-run placement (now 3 guns), re-test** (toed-in two-gun playtest
+  2026-07-30 exposed the hang-back exploit: allies respawn at the craft line, so under
+  "closest exposed first" someone was always closer than the player — mid-lane, no gun
+  ever serviced them. Decision 033: movement now draws priority, guns stop double-targeting,
+  and the center bunker mounts a sea-facing MG (the "command bunker" concept and its
+  officer story are dropped — Decision 033). Needs a fresh PlaceMGCrew.py run for the
+  center gun; the C++ changes are compiled and live):
   1. Open Lvl_FirstPerson → Tools > Execute Python Script > `Tools/PlaceMGCrew.py`
-     (spawns the gun into Bunker_MG_Right with barrel through the slit, gunner + loader
-     mannequins, sounds wired, plus the MGBunkerManager and AllySimManager actors)
-  2. Check the spawn looks right in the viewport (barrel through the slit, crew standing
-     on the ground inside) — the slit-height math is untested; if it's off, tweak the
-     constants at the top of PlaceMGCrew.py and re-run (idempotent)
+     (idempotent — clears the previous batch, spawns all three guns fresh)
+  2. Check all three spawns look right in the viewport (flank barrels angled 30° toward
+     the beach center, center barrel straight out to sea, tips poking just past the slit,
+     crew standing on the ground inside) — re-tweak constants at the top of the script
+     and re-run if off
   3. **Save the level** (the spawned actors are not saved until you do)
   4. Hit Play, run the beach, answer the 10_CHECKLIST.md Step 3 questions: hit frequency
      while running, crater survival time, advancing during stop windows, difficulty feel
@@ -207,14 +222,16 @@ more system work (user decision 2026-07-04) — pick them up before tuning zone 
 The landscape is CENTERED on the world origin: its min corner sits at world (−50400, −50400),
 so world = profile-meters × 100 − 50400 on both axes. Profile coords below with world uu in parens.
 - Landing craft (Zone 0, ramp faces +Y inland): A-left 230/270 (−27400, −23400), B-center 510/270 (600, −23400), C-right 790/270 (28600, −23400)
-- Bunkers (Zone 4, slit faces −Y sea): MG-left 200/620 (−30400, 11600), command 510/635 (600, 13100), MG-right 800/620 (29600, 11600)
+- Bunkers (Zone 4, slit faces −Y sea): MG-left 200/620 (−30400, 11600), MG-center 510/635 (600, 13100), MG-right 800/620 (29600, 11600)
 
-## What Was Done (last session — 2026-07-19)
+## What Was Done (last session — 2026-07-30)
 
-- Step 3 spec grilled to consensus (user's preferred flow) → Decisions 027–031 logged,
-  08_ENEMY_AI.md rewritten (crew, perception, simulated stops, ally sim, exec commands)
-- MG bunker system + ally simulation + projectile bullets built (see Code above),
-  compiles clean, classes + CDO settings verified headless
-- Placeholder audio synthesized, imported, disk-verified (fire loop looping, crack)
-- F7 → MGDebug added to DefaultInput.ini DebugExecBindings
-- REMAINING: user runs Tools/PlaceMGCrew.py in-editor, saves level, feel-checks
+- Two playtests, two fixes to how the MG battery covers the beach:
+  - Center-lane dead zone (sea-facing guns + 55° arc limit) → Decision 032, flanks toed
+    in 30° (enfilade), FirePort placement made yaw-proof in PlaceMGCrew.py
+  - Hang-back exploit (allies respawn closer, "closest exposed first" never services the
+    player) → Decision 033: movement-scaled priority, cross-gun target dedup, third MG
+    in the center bunker
+- "Command bunker" concept dropped with its officer story (was doc elaboration, never a
+  user decision) — all three are plain MG bunkers, enemy narratives are ordinary soldiers
+- REMAINING: user re-runs Tools/PlaceMGCrew.py in-editor (3 guns), saves level, feel-checks

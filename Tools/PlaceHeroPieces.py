@@ -34,7 +34,7 @@ BUNKER_EMBED_M = 0.5
 
 BUNKERS = [
     {"label": "Bunker_MG_Left",  "x": 200, "y": 620, "yaw": 0.0, "width": 6.0, "depth": 5.0, "height": 2.6, "slit_width": 3.0},
-    {"label": "Bunker_Command",  "x": 510, "y": 635, "yaw": 0.0, "width": 8.0, "depth": 6.0, "height": 2.8, "slit_width": 4.0},
+    {"label": "Bunker_MG_Center", "x": 510, "y": 635, "yaw": 0.0, "width": 8.0, "depth": 6.0, "height": 2.8, "slit_width": 4.0},
     {"label": "Bunker_MG_Right", "x": 800, "y": 620, "yaw": 0.0, "width": 6.0, "depth": 5.0, "height": 2.6, "slit_width": 3.0},
 ]
 

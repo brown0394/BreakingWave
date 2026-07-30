@@ -57,7 +57,10 @@
       "Read(//c//**)",
       "Bash(find \"/c\" -maxdepth 3 -iname \"UE_5*\")",
       "Read(//c/Program Files/**)",
-      "PowerShell($proj = \\(Get-Location\\).Path + \"\\\\BreakingWave.uproject\"; & \"C:\\\\Program Files\\\\Epic Games\\\\UE_5.6\\\\Engine\\\\Build\\\\BatchFiles\\\\Build.bat\" BreakingWaveEditor Win64 Development -project=\"$proj\" -waitmutex 2>&1 | Select-Object -Last 100)"
+      "PowerShell($proj = \\(Get-Location\\).Path + \"\\\\BreakingWave.uproject\"; & \"C:\\\\Program Files\\\\Epic Games\\\\UE_5.6\\\\Engine\\\\Build\\\\BatchFiles\\\\Build.bat\" BreakingWaveEditor Win64 Development -project=\"$proj\" -waitmutex 2>&1 | Select-Object -Last 100)",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('Tools/PlaceMGCrew.py', encoding='utf-8'\\).read\\(\\)\\)\")",
+      "Bash(python -m py_compile \"C:\\\\Users\\\\user\\\\Documents\\\\Unreal Projects\\\\BreakingWave\\\\Tools\\\\PlaceMGCrew.py\")",
+      "Bash(py -3 -m py_compile \"C:\\\\Users\\\\user\\\\Documents\\\\Unreal Projects\\\\BreakingWave\\\\Tools\\\\PlaceMGCrew.py\")"
     ]
   }
 }
