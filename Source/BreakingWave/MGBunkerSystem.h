@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "Engine/TimerHandle.h"
 #include "GameFramework/Actor.h"
+#include "PlaytestRecorder.h"
 #include "MGBunkerSystem.generated.h"
 
 class AAllySimManager;
@@ -350,6 +351,8 @@ public:
 protected:
 	virtual void BeginPlay() override;
 
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
+
 	UPROPERTY(EditAnywhere, Category = "MG", meta = (ShowOnlyInnerProperties))
 	FMGSettings Settings;
 
@@ -373,13 +376,13 @@ private:
 
 	void FireRound(FMGBunkerState& State, int32 BunkerIndex);
 
-	void StartStop(FMGBunkerState& State, EMGStop Stop);
+	void StartStop(FMGBunkerState& State, int32 BunkerIndex, EMGStop Stop);
 
 	float StopDuration(const FMGBunkerState& State, EMGStop Stop) const;
 
 	void UpdateBullets(float DeltaSeconds);
 
-	void HandlePlayerHit();
+	void HandlePlayerHit(int32 SourceBunkerIndex, const FVector& HitPoint);
 
 	void SyncFiringAudio(FMGBunkerState& State, bool bActuallyFiring);
 
@@ -406,6 +409,8 @@ private:
 	TArray<FMGBunkerState> Bunkers;
 
 	TArray<FMGBullet> Bullets;
+
+	FPlaytestRecorder Recorder;
 
 	TWeakObjectPtr<AAllySimManager> AllySim;
 

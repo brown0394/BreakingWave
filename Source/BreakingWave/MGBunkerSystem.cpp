@@ -138,6 +138,14 @@ void AMGBunkerManager::BeginPlay()
 		It->SetRenderedCrewCount(2);
 		Bunkers.Add(State);
 	}
+
+	Recorder.BeginSession(GetWorld(), Settings, AllySim.IsValid() ? &AllySim->GetSettings() : nullptr);
+}
+
+void AMGBunkerManager::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	Recorder.EndSession();
+	Super::EndPlay(EndPlayReason);
 }
 
 ABreakingWaveCharacter* AMGBunkerManager::GetPlayerCharacter() const
@@ -168,6 +176,25 @@ void AMGBunkerManager::Tick(float DeltaSeconds)
 	}
 
 	UpdateBullets(DeltaSeconds);
+
+	bool bPlayerTargeted = false;
+	int32 StoppedGunCount = 0;
+	for (const FMGBunkerState& State : Bunkers)
+	{
+		if (State.CrewAlive <= 0)
+		{
+			continue;
+		}
+		if (State.Stop != EMGStop::None)
+		{
+			++StoppedGunCount;
+		}
+		else if (State.CurrentTargetId == PlayerTargetId)
+		{
+			bPlayerTargeted = true;
+		}
+	}
+	Recorder.SamplePlayer(GetPlayerCharacter(), bPlayerTargeted, StoppedGunCount, DeltaSeconds);
 
 	if (bDebug)
 	{
@@ -205,6 +232,7 @@ void AMGBunkerManager::UpdateBunker(FMGBunkerState& State, int32 BunkerIndex, fl
 			{
 				State.Heat = 0.f;
 			}
+			Recorder.LogStopEnd(BunkerIndex, State.Stop);
 			State.Stop = EMGStop::None;
 			State.BurstSeconds = 0.f;
 			State.bJamRolledThisBurst = false;
@@ -217,7 +245,12 @@ void AMGBunkerManager::UpdateBunker(FMGBunkerState& State, int32 BunkerIndex, fl
 	{
 		State.EvalTimer += Settings.EvaluationInterval;
 		EvaluatePerception(State);
+		const int32 PreviousTargetId = State.CurrentTargetId;
 		SelectTarget(State, BunkerIndex, GetWorld()->GetTimeSeconds());
+		if (State.CurrentTargetId != PreviousTargetId)
+		{
+			Recorder.LogTargetSwitch(BunkerIndex, PreviousTargetId, State.CurrentTargetId);
+		}
 	}
 
 	UpdateRotation(State, DeltaSeconds);
@@ -460,7 +493,7 @@ void AMGBunkerManager::UpdateFiring(FMGBunkerState& State, int32 BunkerIndex, fl
 		State.bJamRolledThisBurst = true;
 		if (FMath::FRand() < Settings.JamChancePerBurst)
 		{
-			StartStop(State, EMGStop::Jam);
+			StartStop(State, BunkerIndex, EMGStop::Jam);
 			return;
 		}
 	}
@@ -476,11 +509,11 @@ void AMGBunkerManager::UpdateFiring(FMGBunkerState& State, int32 BunkerIndex, fl
 
 		if (State.BeltRounds <= 0)
 		{
-			StartStop(State, EMGStop::Reload);
+			StartStop(State, BunkerIndex, EMGStop::Reload);
 		}
 		else if (State.Heat >= Settings.OverheatThreshold)
 		{
-			StartStop(State, EMGStop::BarrelChange);
+			StartStop(State, BunkerIndex, EMGStop::BarrelChange);
 		}
 	}
 
@@ -521,13 +554,16 @@ void AMGBunkerManager::FireRound(FMGBunkerState& State, int32 BunkerIndex)
 	Bullet.RemainingLife = Settings.BulletLifetime;
 	Bullet.SourceBunkerIndex = BunkerIndex;
 	Bullets.Add(Bullet);
+
+	Recorder.LogShot(BunkerIndex, Bullet.Position, State.CurrentTargetId);
 }
 
-void AMGBunkerManager::StartStop(FMGBunkerState& State, EMGStop Stop)
+void AMGBunkerManager::StartStop(FMGBunkerState& State, int32 BunkerIndex, EMGStop Stop)
 {
 	State.Stop = Stop;
 	State.StopTimer = StopDuration(State, Stop);
 	SyncFiringAudio(State, false);
+	Recorder.LogStopStart(BunkerIndex, Stop, State.StopTimer);
 }
 
 float AMGBunkerManager::StopDuration(const FMGBunkerState& State, EMGStop Stop) const
@@ -653,6 +689,7 @@ void AMGBunkerManager::UpdateBullets(float DeltaSeconds)
 			if (FVector::Dist(NearPoint, PlayerHead) < Settings.CrackRadius)
 			{
 				Bullet.bCrackPlayed = true;
+				Recorder.LogCrack(Bullet.SourceBunkerIndex, NearPoint);
 				if (Bunkers.IsValidIndex(Bullet.SourceBunkerIndex) && Bunkers[Bullet.SourceBunkerIndex].Gun.IsValid())
 				{
 					if (USoundBase* Crack = Bunkers[Bullet.SourceBunkerIndex].Gun->GetCrackSound())
@@ -673,14 +710,16 @@ void AMGBunkerManager::UpdateBullets(float DeltaSeconds)
 #if ENABLE_DRAW_DEBUG
 			DrawDebugPoint(GetWorld(), HitPoint, 6.f, FColor(240, 220, 140), false, 0.4f);
 #endif
+			Recorder.LogImpact(Bullet.SourceBunkerIndex, HitPoint);
 			Bullets.RemoveAtSwap(i);
 			break;
 		case EHit::Ally:
 			AllySim->KillAlly(HitAllyIndex);
+			Recorder.LogAllyKilled(Bullet.SourceBunkerIndex, HitPoint);
 			Bullets.RemoveAtSwap(i);
 			break;
 		case EHit::Player:
-			HandlePlayerHit();
+			HandlePlayerHit(Bullet.SourceBunkerIndex, HitPoint);
 			Bullets.RemoveAtSwap(i);
 			break;
 		default:
@@ -690,13 +729,15 @@ void AMGBunkerManager::UpdateBullets(float DeltaSeconds)
 	}
 }
 
-void AMGBunkerManager::HandlePlayerHit()
+void AMGBunkerManager::HandlePlayerHit(int32 SourceBunkerIndex, const FVector& HitPoint)
 {
 	ABreakingWaveCharacter* Player = GetPlayerCharacter();
 	if (Player == nullptr)
 	{
 		return;
 	}
+
+	Recorder.LogPlayerHit(SourceBunkerIndex, HitPoint, bNoDamage);
 
 	if (bNoDamage)
 	{
@@ -711,6 +752,8 @@ void AMGBunkerManager::HandlePlayerHit()
 	{
 		return;
 	}
+
+	Recorder.LogPlayerDeath(Player->GetActorLocation());
 
 	Player->SetActorTransform(PlayerSpawnTransform, false, nullptr, ETeleportType::TeleportPhysics);
 	Player->GetCharacterMovement()->StopMovementImmediately();
@@ -822,6 +865,7 @@ bool AMGBunkerManager::IsAware(const FMGBunkerState& State, int32 TargetId, floa
 void AMGBunkerManager::ToggleNoDamage()
 {
 	bNoDamage = !bNoDamage;
+	Recorder.LogNoDamageToggle(bNoDamage);
 	if (GEngine != nullptr)
 	{
 		GEngine->AddOnScreenDebugMessage(102, 3.f, FColor::Yellow,
@@ -831,20 +875,22 @@ void AMGBunkerManager::ToggleNoDamage()
 
 void AMGBunkerManager::KillGunCrewMember()
 {
-	for (FMGBunkerState& State : Bunkers)
+	for (int32 BunkerIndex = 0; BunkerIndex < Bunkers.Num(); ++BunkerIndex)
 	{
+		FMGBunkerState& State = Bunkers[BunkerIndex];
 		if (State.CrewAlive <= 0)
 		{
 			continue;
 		}
 		--State.CrewAlive;
+		Recorder.LogCrewKilled(BunkerIndex, State.CrewAlive);
 		if (State.Gun.IsValid())
 		{
 			State.Gun->SetRenderedCrewCount(FMath::Min(State.CrewAlive, 2));
 		}
 		if (State.CrewAlive > 0)
 		{
-			StartStop(State, EMGStop::Takeover);
+			StartStop(State, BunkerIndex, EMGStop::Takeover);
 		}
 		else
 		{

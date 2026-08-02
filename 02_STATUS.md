@@ -1,6 +1,6 @@
 # Current Status
 
-> Last updated: 2026-07-30
+> Last updated: 2026-08-02
 >
 > This document holds the CURRENT state and what's next — nothing else. Session history
 > lives in git log; the why of past choices lives in 03_DECISIONS.md; engine gotchas live
@@ -117,6 +117,18 @@ more system work (user decision 2026-07-04) — pick them up before tuning zone 
   behavior; visual shells come in the ally step. Knobs in FAllySimSettings
 - [x] Placeholder audio: /Game/Audio/MGFireLoop (looping, synthesized) + MGCrack,
   disk-verified; regenerate via Tools/GenerateMGPlaceholderAudio.py (headless OK)
+- [x] Playtest telemetry (PlaytestRecorder.h/.cpp, built 2026-08-02): FPlaytestRecorder
+  lives inside AMGBunkerManager and auto-records every PIE session to
+  Saved/Playtests/session_<stamp>.csv — settings snapshot (FMGSettings + FAllySimSettings
+  dumped via reflection, so tuning changes stay attributable per session), 2 Hz player
+  samples (stance/speed/targeted/stopped-gun-count), per-shot / bullet-impact / crack /
+  ally-death / player-hit / stop / target-switch events, and zone-crossing splits (Y bands
+  from the 05_ZONES.md profile table — Playtest::ZoneBoundariesY, mirrored in
+  AnalyzePlaytests.py; update both if zones move). On death: on-screen + log run summary
+  (survival time, deepest zone, shots-at-you/hits/cracks, advance while targeted vs clear,
+  zone splits). MGNoDamage taints the run so the analyzer excludes it from combat stats.
+  Flushes every 5 s and on death/EndPlay; hit=respawn scaffolding means "death" = first
+  hit for now
 
 ### Tools
 - [x] Tools/GenerateBeachHeightmap.ps1 — generates the zone-profiled heightmap
@@ -159,8 +171,14 @@ more system work (user decision 2026-07-04) — pick them up before tuning zone 
   handled per-entry); drop the Center entry and re-run to A/B two guns vs three. Gun root
   derived so the FirePort sits just outside the slit plane at any yaw (arc-edge shots can't
   clip the slit jambs). One MGBunkerManager drives all guns (auto-discovers at BeginPlay).
-  Idempotent (MGSystem tag); EDITOR-ONLY (spawning crashes headless). RE-RUN NEEDED to
-  place the center gun.
+  Idempotent (MGSystem tag); EDITOR-ONLY (spawning crashes headless). Re-run with 3 guns
+  done 2026-08-02 (viewport check + level save still pending).
+- [x] Tools/AnalyzePlaytests.py (+ AnalyzePlaytests.bat) — offline analyzer for
+  Saved/Playtests: per-run table, aggregates (median survival, zone-split medians, hit
+  rate, advance-while-targeted vs clear), settings diffs between sessions, and
+  analysis.png maps (player paths + deaths, MG fire concentration heatmap, ally-death
+  heatmap). No editor needed; the .bat runs it on the UE-bundled Python (system Python is
+  only the Store stub; matplotlib pip-installed --user for the UE Python 2026-08-02)
 
 ### Level
 - [x] Beach heightmap imported at scale 100/100/200 (Decision 022) — zone-profiled terrain
@@ -175,28 +193,29 @@ more system work (user decision 2026-07-04) — pick them up before tuning zone 
 
 ## Next Steps
 
-- [ ] **RESUME HERE — re-run placement (now 3 guns), re-test** (toed-in two-gun playtest
-  2026-07-30 exposed the hang-back exploit: allies respawn at the craft line, so under
-  "closest exposed first" someone was always closer than the player — mid-lane, no gun
-  ever serviced them. Decision 033: movement now draws priority, guns stop double-targeting,
-  and the center bunker mounts a sea-facing MG (the "command bunker" concept and its
-  officer story are dropped — Decision 033). Needs a fresh PlaceMGCrew.py run for the
-  center gun; the C++ changes are compiled and live):
-  1. Open Lvl_FirstPerson → Tools > Execute Python Script > `Tools/PlaceMGCrew.py`
-     (idempotent — clears the previous batch, spawns all three guns fresh)
-  2. Check all three spawns look right in the viewport (flank barrels angled 30° toward
+- [ ] **RESUME HERE — verify 3-gun placement, then the Step 3 feel-check (now with
+  telemetry)**. PlaceMGCrew.py was re-run 2026-08-02 (3 guns, Decision 033 C++ live);
+  remaining:
+  1. Check all three spawns look right in the viewport (flank barrels angled 30° toward
      the beach center, center barrel straight out to sea, tips poking just past the slit,
      crew standing on the ground inside) — re-tweak constants at the top of the script
      and re-run if off
-  3. **Save the level** (the spawned actors are not saved until you do)
-  4. Hit Play, run the beach, answer the 10_CHECKLIST.md Step 3 questions: hit frequency
-     while running, crater survival time, advancing during stop windows, difficulty feel
+  2. **Save the level** (the spawned actors are not saved until you do)
+  3. Hit Play, run the beach several times, answer the 10_CHECKLIST.md Step 3 questions:
+     hit frequency while running, crater survival time, advancing during stop windows,
+     difficulty feel. Every PIE session now auto-records to Saved/Playtests/ — each death
+     prints a run summary (survival, splits, hit rate, advance while targeted vs clear);
+     verify the hang-back exploit is gone (hanging back mid-lane should get you shot)
+  4. After the runs: `Tools\AnalyzePlaytests.bat` → per-run table, medians, settings
+     diffs, and Saved/Playtests/analysis.png (paths/deaths, MG fire heat, ally deaths)
   5. Debug aids: **F7** = debug readout (aim line, crew/belt/heat/stop state, ally
-     capsules); console `MGNoDamage` = observe without dying, `MGKillCrew` = test takeover
-     windows + crew degradation tiers
+     capsules); console `MGNoDamage` = observe without dying (taints the run's combat
+     stats — the analyzer excludes it), `MGKillCrew` = test takeover windows + crew
+     degradation tiers
   6. Tune in the Details panel: FMGSettings on MGBunkerManager, FAllySimSettings on
-     AllySimManager (all numbers tentative). Record tuned values in 08_ENEMY_AI.md when
-     it feels right, per the checklist
+     AllySimManager (all numbers tentative; each session CSV snapshots the settings it
+     ran under). Record tuned values in 08_ENEMY_AI.md when it feels right, per the
+     checklist
   Greybox caveats: tracers converge on invisible sim allies (fog + rendered allies fix
   that later — don't judge it now); any hit = instant respawn scaffolding, so the MG reads
   ~2× more lethal than the final two-shot model — discount accordingly when tuning
@@ -224,14 +243,15 @@ so world = profile-meters × 100 − 50400 on both axes. Profile coords below wi
 - Landing craft (Zone 0, ramp faces +Y inland): A-left 230/270 (−27400, −23400), B-center 510/270 (600, −23400), C-right 790/270 (28600, −23400)
 - Bunkers (Zone 4, slit faces −Y sea): MG-left 200/620 (−30400, 11600), MG-center 510/635 (600, 13100), MG-right 800/620 (29600, 11600)
 
-## What Was Done (last session — 2026-07-30)
+## What Was Done (last session — 2026-08-02)
 
-- Two playtests, two fixes to how the MG battery covers the beach:
-  - Center-lane dead zone (sea-facing guns + 55° arc limit) → Decision 032, flanks toed
-    in 30° (enfilade), FirePort placement made yaw-proof in PlaceMGCrew.py
-  - Hang-back exploit (allies respawn closer, "closest exposed first" never services the
-    player) → Decision 033: movement-scaled priority, cross-gun target dedup, third MG
-    in the center bunker
-- "Command bunker" concept dropped with its officer story (was doc elaboration, never a
-  user decision) — all three are plain MG bunkers, enemy narratives are ordinary soldiers
-- REMAINING: user re-runs Tools/PlaceMGCrew.py in-editor (3 guns), saves level, feel-checks
+- User re-ran Tools/PlaceMGCrew.py in-editor (3 guns per Decision 033)
+- Playtest telemetry built so the Step 3 feel-check produces data, not just impressions
+  (researched against Valve's hypothesis/experiment playtest model + Halo-style death
+  heatmaps): FPlaytestRecorder in the MG manager records every PIE session to CSV,
+  on-death run summaries on screen, Tools/AnalyzePlaytests.bat aggregates runs into
+  tables + heatmap PNG. Compiled clean via Build.bat; analyzer verified against a
+  synthetic session
+- Prior session (2026-07-30): Decisions 032–033 — enfilade toe-in, movement-scaled
+  priority, cross-gun dedup, third center MG; command-bunker concept dropped
+- REMAINING: user verifies spawns in viewport, saves level, feel-checks with telemetry
