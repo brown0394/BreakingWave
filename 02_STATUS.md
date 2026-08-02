@@ -110,11 +110,28 @@ more system work (user decision 2026-07-04) — pick them up before tuning zone 
   scales with ground speed (MovingTargetScoreBonus / MovingTargetScoreReferenceSpeed —
   a sprinter outranks a nearer prone man) and guns deprioritize targets another gun is
   already working (SharedTargetScorePenalty — the battery splits the wave). Compiled
-  clean 2026-07-30; not yet play-tested.
+  clean 2026-07-30; not yet play-tested. Stop-clock desync added 2026-08-02: each gun
+  starts with a partial belt (StartingBeltFractionMin) and some heat
+  (StartingHeatFractionMax) — first session showed all three guns barrel-changing at
+  the same instant (~10 s) because identical clocks all started firing at t=0,
+  silencing the whole beach at once instead of opening per-gun windows.
+  Target leading added 2026-08-02 (after the second batch of runs): gunners aim ahead
+  of a mover by bullet flight time × LeadFraction, rolled in [LeadFractionMin 0.6,
+  LeadFractionMax 1.15] per target switch — before this, bullets flew at the target's
+  CURRENT position, so flank fire at a 900-speed sprinter missed by a systematic 3.6 m
+  at 300 m (0.4 s flight); 7 of 8 recorded hits were the center gun hitting a player
+  charging straight at it, and sprint-through defeated the Decision 032 enfilade
+  entirely. Lead applies at the aim-target level (UpdateRotation), so the slew limit
+  and rotating-dispersion penalty still govern — a close crosser can still outrun the
+  barrel. Compiled clean; not yet play-tested.
 - [x] Ally simulation (BeachAllySim.h/.cpp, Decision 029): AAllySimManager ticks unrendered
   ally structs — spawn near craft, advance w/ wander, random prone pauses, die to MG fire,
   slot reuse w/ generation counter. Struct shaped for the later full 09_ALLY_NPC.md
-  behavior; visual shells come in the ally step. Knobs in FAllySimSettings
+  behavior; visual shells come in the ally step. Knobs in FAllySimSettings.
+  Pre-warm added 2026-08-02: BeginPlay simulates PreWarmSeconds (60) of assault before
+  play, so the player lands mid-wave — fixes the first-session spawn-lock, where an empty
+  beach made the player the only target and all three guns killed them at the craft in
+  under a second (twice)
 - [x] Placeholder audio: /Game/Audio/MGFireLoop (looping, synthesized) + MGCrack,
   disk-verified; regenerate via Tools/GenerateMGPlaceholderAudio.py (headless OK)
 - [x] Playtest telemetry (PlaytestRecorder.h/.cpp, built 2026-08-02): FPlaytestRecorder
@@ -243,15 +260,34 @@ so world = profile-meters × 100 − 50400 on both axes. Profile coords below wi
 - Landing craft (Zone 0, ramp faces +Y inland): A-left 230/270 (−27400, −23400), B-center 510/270 (600, −23400), C-right 790/270 (28600, −23400)
 - Bunkers (Zone 4, slit faces −Y sea): MG-left 200/620 (−30400, 11600), MG-center 510/635 (600, 13100), MG-right 800/620 (29600, 11600)
 
-## What Was Done (last session — 2026-08-02)
+## What Was Done (last session — 2026-08-02, second sitting)
 
-- User re-ran Tools/PlaceMGCrew.py in-editor (3 guns per Decision 033)
-- Playtest telemetry built so the Step 3 feel-check produces data, not just impressions
-  (researched against Valve's hypothesis/experiment playtest model + Halo-style death
-  heatmaps): FPlaytestRecorder in the MG manager records every PIE session to CSV,
-  on-death run summaries on screen, Tools/AnalyzePlaytests.bat aggregates runs into
-  tables + heatmap PNG. Compiled clean via Build.bat; analyzer verified against a
-  synthetic session
-- Prior session (2026-07-30): Decisions 032–033 — enfilade toe-in, movement-scaled
-  priority, cross-gun dedup, third center MG; command-bunker concept dropped
-- REMAINING: user verifies spawns in viewport, saves level, feel-checks with telemetry
+- First telemetry session analyzed (session_20260802_170635, 3 runs). Findings:
+  (1) spawn-lock — empty beach at t=0 made the player the sole target, all three guns
+  locked on at t=0.01 and killed them at the craft in ~1 s, twice; (2) once ~20 allies
+  were alive the player became statistically invisible — targeted 3× in 49 s, 66 aimed
+  shots, 0 hits, walked 398 m straight up the center to Z4 untouched (sprint-through
+  exploit, inverse of the hang-back one); (3) all three guns' stop clocks ran in sync
+  (simultaneous barrel change at 9.9 s) — battery-wide silence instead of per-gun windows
+- Fixed (1) with ally-sim pre-warm (PreWarmSeconds) and (3) with randomized starting
+  belt/heat (StartingBeltFractionMin / StartingHeatFractionMax). Compiled clean.
+  Finding (2) deliberately NOT acted on yet — needs more runs with the pre-warm live
+  before judging whether player priority needs a knob (sprint 900 already earns the max
+  MovingTargetScoreBonus once a gun considers the player at all)
+- Player run speed deliberately unchanged: the walk-through was a targeting failure, not
+  a speed problem; locomotion rates are foot-true at 600/900; zone transit times are
+  measured at the fog walkthrough
+- Earlier sitting: playtest telemetry built (FPlaytestRecorder → CSV per PIE session,
+  on-death run summaries, Tools/AnalyzePlaytests.bat → tables + heatmap PNG); user
+  re-ran Tools/PlaceMGCrew.py in-editor (3 guns per Decision 033)
+- Second batch analyzed (3 sessions, 9 runs, pre-warm + desync live): both fixes verified
+  in the CSVs (guns open on allies at t=0.01; stops staggered). Survival median rose from
+  0.9 s to ~20 s with deaths now landing in Z3. But sprint-through still reached Z4 in
+  every run that survived past Z3: 367 aimed shots produced 8 hits (2.2%), 7 of them from
+  the center gun against a player charging straight at it — no-lead firing meant flank
+  fire missed a sprinter systematically. Target leading added in response (see MG bunker
+  entry); not yet play-tested
+- REMAINING: user verifies spawns in viewport, saves level, feel-checks with telemetry.
+  Next batch tests the leading — sprint-through up the center should now die to the
+  flanks, making cover use / stop windows (the actual Step 3 checklist questions)
+  testable for the first time

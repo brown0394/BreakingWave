@@ -132,7 +132,8 @@ void AMGBunkerManager::BeginPlay()
 		State.AimYaw = State.RestYaw;
 		State.TargetYaw = State.RestYaw;
 		State.CrewAlive = Settings.GarrisonSize;
-		State.BeltRounds = Settings.BeltSize;
+		State.BeltRounds = FMath::RoundToInt(Settings.BeltSize * FMath::FRandRange(Settings.StartingBeltFractionMin, 1.f));
+		State.Heat = Settings.OverheatThreshold * FMath::FRandRange(0.f, Settings.StartingHeatFractionMax);
 		State.CurrentTargetId = NoTargetId;
 		State.Awareness.SetNum(AwarenessSlots);
 		It->SetRenderedCrewCount(2);
@@ -417,6 +418,7 @@ void AMGBunkerManager::SelectTarget(FMGBunkerState& State, int32 BunkerIndex, fl
 	{
 		State.CurrentTargetId = BestId;
 		State.RotationSpeedJitter = FMath::FRandRange(1.f - Settings.RotationSpeedVariance, 1.f + Settings.RotationSpeedVariance);
+		State.LeadFraction = FMath::FRandRange(Settings.LeadFractionMin, Settings.LeadFractionMax);
 		return;
 	}
 
@@ -427,6 +429,7 @@ void AMGBunkerManager::SelectTarget(FMGBunkerState& State, int32 BunkerIndex, fl
 		{
 			State.CurrentTargetId = BestId;
 			State.RotationSpeedJitter = FMath::FRandRange(1.f - Settings.RotationSpeedVariance, 1.f + Settings.RotationSpeedVariance);
+			State.LeadFraction = FMath::FRandRange(Settings.LeadFractionMin, Settings.LeadFractionMax);
 		}
 	}
 }
@@ -453,7 +456,12 @@ void AMGBunkerManager::UpdateRotation(FMGBunkerState& State, float DeltaSeconds)
 	{
 		const FMGAwareness& Aw = AwarenessFor(State, State.CurrentTargetId);
 		const bool bLiveTrack = Aw.LastExposure > 0.f && IsTargetAlive(State.CurrentTargetId);
-		const FVector AimPos = bLiveTrack ? GetTargetPosition(State.CurrentTargetId) : Aw.LastKnownPos;
+		FVector AimPos = bLiveTrack ? GetTargetPosition(State.CurrentTargetId) : Aw.LastKnownPos;
+		if (bLiveTrack)
+		{
+			const float FlightTime = FVector::Dist(State.Gun->GetFirePosition(), AimPos) / Settings.MuzzleVelocity;
+			AimPos += GetTargetVelocity(State.CurrentTargetId) * FlightTime * State.LeadFraction;
+		}
 		const FVector ToAim = AimPos - State.Gun->GetFirePosition();
 		State.TargetYaw = FMath::RadiansToDegrees(FMath::Atan2(ToAim.Y, ToAim.X));
 		State.TargetPitch = FMath::RadiansToDegrees(FMath::Atan2(ToAim.Z, ToAim.Size2D()));

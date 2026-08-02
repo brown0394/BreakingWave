@@ -18,12 +18,38 @@ void AAllySimManager::BeginPlay()
 {
 	Super::BeginPlay();
 	Allies.SetNum(Settings.MaxAlive);
+
+	const float PreWarmStepSeconds = 0.25f;
+	for (float Simulated = 0.f; Simulated < Settings.PreWarmSeconds; Simulated += PreWarmStepSeconds)
+	{
+		SimulateStep(PreWarmStepSeconds);
+	}
 }
 
 void AAllySimManager::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
 
+	SimulateStep(DeltaSeconds);
+
+	if (bDebugDraw)
+	{
+		for (const FSimAlly& Ally : Allies)
+		{
+			if (!Ally.bAlive)
+			{
+				continue;
+			}
+			const float Height = GetBodyHeight(Ally);
+			const FVector Center = Ally.Position + FVector(0.f, 0.f, Height * 0.5f);
+			DrawDebugCapsule(GetWorld(), Center, Height * 0.5f, Settings.BodyRadius,
+				FQuat::Identity, FColor::Green, false, -1.f, 0, 1.5f);
+		}
+	}
+}
+
+void AAllySimManager::SimulateStep(float DeltaSeconds)
+{
 	SpawnAccumulator += Settings.SpawnsPerSecond * DeltaSeconds;
 	while (SpawnAccumulator >= 1.f)
 	{
@@ -41,21 +67,6 @@ void AAllySimManager::Tick(float DeltaSeconds)
 		if (Ally.Position.Y > Settings.DespawnY)
 		{
 			Ally.bAlive = false;
-		}
-	}
-
-	if (bDebugDraw)
-	{
-		for (const FSimAlly& Ally : Allies)
-		{
-			if (!Ally.bAlive)
-			{
-				continue;
-			}
-			const float Height = GetBodyHeight(Ally);
-			const FVector Center = Ally.Position + FVector(0.f, 0.f, Height * 0.5f);
-			DrawDebugCapsule(GetWorld(), Center, Height * 0.5f, Settings.BodyRadius,
-				FQuat::Identity, FColor::Green, false, -1.f, 0, 1.5f);
 		}
 	}
 }

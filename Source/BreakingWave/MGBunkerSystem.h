@@ -84,12 +84,27 @@ struct FMGSettings
 	UPROPERTY(EditAnywhere, Category = "MG|Fire")
 	float ProneTargetDispersionMultiplier = 1.5f;
 
+	/** Gunners aim ahead of a mover by bullet flight time × a fraction rolled in [Min, Max] per target switch — imperfect lead keeps crossing fire beatable */
+	UPROPERTY(EditAnywhere, Category = "MG|Fire")
+	float LeadFractionMin = 0.6f;
+
+	UPROPERTY(EditAnywhere, Category = "MG|Fire")
+	float LeadFractionMax = 1.15f;
+
 	/** A pause longer than this starts a new burst (jam roll, dispersion ramp reset) */
 	UPROPERTY(EditAnywhere, Category = "MG|Fire")
 	float BurstGapSeconds = 0.4f;
 
 	UPROPERTY(EditAnywhere, Category = "MG|Stops")
 	int32 BeltSize = 250;
+
+	/** Each gun starts with a partial belt rolled in [this, 1] × BeltSize — desyncs the battery's reload clocks */
+	UPROPERTY(EditAnywhere, Category = "MG|Stops")
+	float StartingBeltFractionMin = 0.35f;
+
+	/** Each gun starts with heat rolled in [0, this] × OverheatThreshold — desyncs the barrel-change clocks */
+	UPROPERTY(EditAnywhere, Category = "MG|Stops")
+	float StartingHeatFractionMax = 0.5f;
 
 	UPROPERTY(EditAnywhere, Category = "MG|Stops")
 	float HeatPerShot = 1.f;
@@ -252,6 +267,8 @@ struct FMGBunkerState
 	float RestYaw = 0.f;
 
 	float RotationSpeedJitter = 1.f;
+
+	float LeadFraction = 1.f;
 
 	float ScanPhase = 0.f;
 

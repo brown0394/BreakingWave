@@ -46,6 +46,10 @@ struct FAllySimSettings
 	UPROPERTY(EditAnywhere, Category = "AllySim")
 	int32 MaxAlive = 32;
 
+	/** Seconds of assault simulated before play begins — the player lands mid-wave, never on an empty beach */
+	UPROPERTY(EditAnywhere, Category = "AllySim")
+	float PreWarmSeconds = 60.f;
+
 	UPROPERTY(EditAnywhere, Category = "AllySim")
 	float SpawnsPerSecond = 1.5f;
 
@@ -126,6 +130,8 @@ protected:
 	TArray<FVector> SpawnPoints;
 
 private:
+	void SimulateStep(float DeltaSeconds);
+
 	void SpawnAlly();
 
 	void AdvanceAlly(FSimAlly& Ally, float DeltaSeconds);
