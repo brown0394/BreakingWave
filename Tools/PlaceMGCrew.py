@@ -40,6 +40,7 @@ CUBE = "/Game/LevelPrototyping/Meshes/SM_Cube.SM_Cube"
 CREW_IDLE = "/Game/AnimStarterPack/Retarget/Idle_Rifle_Hip_UE5.Idle_Rifle_Hip_UE5"
 FIRE_LOOP = "/Game/Audio/MGFireLoop.MGFireLoop"
 CRACK = "/Game/Audio/MGCrack.MGCrack"
+IMPACT = "/Game/Audio/MGImpact.MGImpact"
 
 
 def landscape_min_corner(eas):
@@ -154,6 +155,9 @@ def main():
     manager = eas.spawn_actor_from_class(
         unreal.MGBunkerManager, unreal.Vector(0.0, 0.0, 0.0), unreal.Rotator(0.0, 0.0, 0.0))
     register(manager, "MGBunkerManager")
+    impact = unreal.load_asset(IMPACT)
+    if impact is not None:
+        manager.set_editor_property("impact_sound", impact)
 
     ally_sim = eas.spawn_actor_from_class(
         unreal.AllySimManager, unreal.Vector(0.0, 0.0, 0.0), unreal.Rotator(0.0, 0.0, 0.0))

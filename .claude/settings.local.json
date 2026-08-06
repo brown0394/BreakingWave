@@ -60,7 +60,20 @@
       "PowerShell($proj = \\(Get-Location\\).Path + \"\\\\BreakingWave.uproject\"; & \"C:\\\\Program Files\\\\Epic Games\\\\UE_5.6\\\\Engine\\\\Build\\\\BatchFiles\\\\Build.bat\" BreakingWaveEditor Win64 Development -project=\"$proj\" -waitmutex 2>&1 | Select-Object -Last 100)",
       "Bash(python -c \"import ast; ast.parse\\(open\\('Tools/PlaceMGCrew.py', encoding='utf-8'\\).read\\(\\)\\)\")",
       "Bash(python -m py_compile \"C:\\\\Users\\\\user\\\\Documents\\\\Unreal Projects\\\\BreakingWave\\\\Tools\\\\PlaceMGCrew.py\")",
-      "Bash(py -3 -m py_compile \"C:\\\\Users\\\\user\\\\Documents\\\\Unreal Projects\\\\BreakingWave\\\\Tools\\\\PlaceMGCrew.py\")"
+      "Bash(py -3 -m py_compile \"C:\\\\Users\\\\user\\\\Documents\\\\Unreal Projects\\\\BreakingWave\\\\Tools\\\\PlaceMGCrew.py\")",
+      "WebSearch",
+      "WebFetch(domain:book.leveldesignbook.com)",
+      "PowerShell(python \"C:\\\\Users\\\\user\\\\Documents\\\\Unreal Projects\\\\BreakingWave\\\\Tools\\\\AnalyzePlaytests.py\" \"C:\\\\Users\\\\user\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-user-Documents-Unreal-Projects-BreakingWave\\\\19b4c1e0-6784-4bf1-8047-46d3f3c6600b\\\\scratchpad\\\\playtests\")",
+      "PowerShell(try { py -3 --version } catch { \"no py launcher\" }; \\(Get-Command python -ErrorAction SilentlyContinue\\).Source)",
+      "PowerShell(& \"C:\\\\Program Files\\\\Epic Games\\\\UE_5.6\\\\Engine\\\\Binaries\\\\ThirdParty\\\\Python3\\\\Win64\\\\python.exe\" \"C:\\\\Users\\\\user\\\\Documents\\\\Unreal Projects\\\\BreakingWave\\\\Tools\\\\AnalyzePlaytests.py\" \"C:\\\\Users\\\\user\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-user-Documents-Unreal-Projects-BreakingWave\\\\19b4c1e0-6784-4bf1-8047-46d3f3c6600b\\\\scratchpad\\\\playtests\")",
+      "PowerShell(& \"C:\\\\Program Files\\\\Epic Games\\\\UE_5.6\\\\Engine\\\\Binaries\\\\ThirdParty\\\\Python3\\\\Win64\\\\python.exe\" -m pip install --user matplotlib --quiet; & \"C:\\\\Program Files\\\\Epic Games\\\\UE_5.6\\\\Engine\\\\Binaries\\\\ThirdParty\\\\Python3\\\\Win64\\\\python.exe\" -c \"import matplotlib; print\\(matplotlib.__version__\\)\")",
+      "PowerShell(& \"Tools\\\\AnalyzePlaytests.bat\")",
+      "PowerShell($c = Get-Content \"Saved\\\\Playtests\\\\session_20260806_212149.csv\"; $c | Where-Object { $_ -match ',\\(sample|gun_state|shot|target_switch|player_hit\\),' } | Select-Object -First 8; \\($c | ForEach-Object { \\($_ -split ','\\)[2] } | Group-Object | Sort-Object Count -Descending | ForEach-Object { \"$\\($_.Name\\) x$\\($_.Count\\)\" }\\))",
+      "PowerShell(& \"C:\\\\Program Files\\\\Epic Games\\\\UE_5.6\\\\Engine\\\\Binaries\\\\ThirdParty\\\\Python3\\\\Win64\\\\python.exe\" \"C:\\\\Users\\\\user\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-user-Documents-Unreal-Projects-BreakingWave\\\\a7d2e288-7547-4849-ae0e-840f953875d6\\\\scratchpad\\\\blindspot.py\")",
+      "PowerShell(& \"C:\\\\Program Files\\\\Epic Games\\\\UE_5.6\\\\Engine\\\\Binaries\\\\Win64\\\\UnrealEditor-Cmd.exe\" \"C:\\\\Users\\\\user\\\\Documents\\\\Unreal Projects\\\\BreakingWave\\\\BreakingWave.uproject\" -run=pythonscript -script=\"C:\\\\Users\\\\user\\\\Documents\\\\Unreal Projects\\\\BreakingWave\\\\Tools\\\\GenerateMGPlaceholderAudio.py\" -stdout -unattended -nosplash)",
+      "PowerShell(git log --oneline -3; Select-String -Path \"03_DECISIONS.md\" -Pattern \"^#+ \" | Select-Object -Last 6 | ForEach-Object { $_.Line })",
+      "PowerShell($m = Select-String -Path \"03_DECISIONS.md\" -Pattern \"^### 033\"; Get-Content \"03_DECISIONS.md\" -TotalCount 20; \"\"; \"---tail---\"; Get-Content \"03_DECISIONS.md\" | Select-Object -Skip \\($m.LineNumber - 1\\))",
+      "PowerShell(\\(Get-Content \"03_DECISIONS.md\" -Raw -Encoding UTF8\\).Length; Get-Content \"03_DECISIONS.md\" -Encoding UTF8 | Select-Object -Last 2)"
     ]
   }
 }

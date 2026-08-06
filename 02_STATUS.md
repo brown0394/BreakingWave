@@ -1,6 +1,6 @@
 # Current Status
 
-> Last updated: 2026-08-02
+> Last updated: 2026-08-06
 >
 > This document holds the CURRENT state and what's next — nothing else. Session history
 > lives in git log; the why of past choices lives in 03_DECISIONS.md; engine gotchas live
@@ -132,8 +132,21 @@ more system work (user decision 2026-07-04) — pick them up before tuning zone 
   play, so the player lands mid-wave — fixes the first-session spawn-lock, where an empty
   beach made the player the only target and all three guns killed them at the craft in
   under a second (twice)
-- [x] Placeholder audio: /Game/Audio/MGFireLoop (looping, synthesized) + MGCrack,
-  disk-verified; regenerate via Tools/GenerateMGPlaceholderAudio.py (headless OK)
+- [x] Placeholder audio: /Game/Audio/MGFireLoop (looping) + MGCrack + MGImpact (all
+  synthesized, disk-verified); regenerate via Tools/GenerateMGPlaceholderAudio.py
+  (headless OK)
+- [x] Bullet sound feedback (2026-08-06): world impacts within ImpactSoundRadius (50 m)
+  of the player play MGImpact at the impact point (ImpactSoundMinInterval throttle caps
+  mixer load at 60 rounds/sec battery-wide, pitch jitter for variety); flyby crack
+  reworked — CrackRadius 300 → 1000 (a miss within 10 m of the head now cracks), volume
+  fades from full at a graze to CrackVolumeAtEdge at the radius so loudness reads as
+  closeness, pitch jitter. Both play through runtime USoundAttenuation objects built in
+  BeginPlay, so they are properly spatialized + distance-attenuated (the old crack
+  played flat, unspatialized, full volume). Knobs in FMGSettings "MG|Audio". ImpactSound
+  lives on the manager — BeginPlay falls back to /Game/Audio/MGImpact if unset, and
+  PlaceMGCrew.py wires it on any future re-run (no re-run needed to hear it).
+  Compiled clean; not yet feel-checked. Telemetry note: crack counts from sessions
+  before 2026-08-06 were recorded at radius 300 — not comparable with new sessions
 - [x] Playtest telemetry (PlaytestRecorder.h/.cpp, built 2026-08-02): FPlaytestRecorder
   lives inside AMGBunkerManager and auto-records every PIE session to
   Saved/Playtests/session_<stamp>.csv — settings snapshot (FMGSettings + FAllySimSettings
@@ -210,32 +223,32 @@ more system work (user decision 2026-07-04) — pick them up before tuning zone 
 
 ## Next Steps
 
-- [ ] **RESUME HERE — verify 3-gun placement, then the Step 3 feel-check (now with
-  telemetry)**. PlaceMGCrew.py was re-run 2026-08-02 (3 guns, Decision 033 C++ live);
-  remaining:
-  1. Check all three spawns look right in the viewport (flank barrels angled 30° toward
-     the beach center, center barrel straight out to sea, tips poking just past the slit,
-     crew standing on the ground inside) — re-tweak constants at the top of the script
-     and re-run if off
-  2. **Save the level** (the spawned actors are not saved until you do)
-  3. Hit Play, run the beach several times, answer the 10_CHECKLIST.md Step 3 questions:
-     hit frequency while running, crater survival time, advancing during stop windows,
-     difficulty feel. Every PIE session now auto-records to Saved/Playtests/ — each death
-     prints a run summary (survival, splits, hit rate, advance while targeted vs clear);
-     verify the hang-back exploit is gone (hanging back mid-lane should get you shot)
-  4. After the runs: `Tools\AnalyzePlaytests.bat` → per-run table, medians, settings
-     diffs, and Saved/Playtests/analysis.png (paths/deaths, MG fire heat, ally deaths)
-  5. Debug aids: **F7** = debug readout (aim line, crew/belt/heat/stop state, ally
-     capsules); console `MGNoDamage` = observe without dying (taints the run's combat
-     stats — the analyzer excludes it), `MGKillCrew` = test takeover windows + crew
-     degradation tiers
+- [ ] **RESUME HERE — feel-check the new bullet sounds, then decide the player-priority
+  knob**:
+  1. Hit Play, run the beach — listen for impact thuds landing around you and directional
+     cracks on near misses (crack loudness now reads as closeness; radius is 10 m).
+     Tune in FMGSettings "MG|Audio" if impacts spam or cracks feel weak
+  2. After the runs: `Tools\AnalyzePlaytests.bat` (crack counts will jump vs pre-2026-08-06
+     sessions — radius widened 300 → 1000, not comparable)
+  3. **Pending decision (data ready)**: player-priority knob. Two batches show the player
+     targeted only 4–17% of the time, 95% of fire going at sim allies, 87% of ground
+     gained while clear — the shared root cause of "too easy" and "not intense"
+     (2026-08-06 analysis). Next code change unless the sound pass shifts the read
+  4. Step 3 checklist questions (hit frequency, crater survival, stop windows) stay open
+     until the priority fix makes being targeted routine
+  5. Debug aids: **F7** = debug readout; console `MGNoDamage` = observe without dying
+     (taints the run — analyzer excludes it), `MGKillCrew` = takeover windows
   6. Tune in the Details panel: FMGSettings on MGBunkerManager, FAllySimSettings on
-     AllySimManager (all numbers tentative; each session CSV snapshots the settings it
-     ran under). Record tuned values in 08_ENEMY_AI.md when it feels right, per the
-     checklist
+     AllySimManager (each session CSV snapshots its settings). Record tuned values in
+     08_ENEMY_AI.md when it feels right, per the checklist
   Greybox caveats: tracers converge on invisible sim allies (fog + rendered allies fix
   that later — don't judge it now); any hit = instant respawn scaffolding, so the MG reads
-  ~2× more lethal than the final two-shot model — discount accordingly when tuning
+  ~2× more lethal than the final two-shot model — discount accordingly when tuning.
+  Known-by-design: the seam between bunkers close to the defense line sits outside every
+  gun's 55° slit arc (verified in run data 2026-08-06) — enemy infantry in Z3
+  (foxholes/trench, 05_ZONES.md) owns that band later; do not widen MG arcs for it.
+  Beach length judgment also deferred: 35–54 s Z0→Z4 was measured while free-sprinting
+  96% of the time — re-judge after the priority fix + fog, not before
 
 ### Writing backlog
 - [ ] Second character ("the one who shook me") narrative writing
@@ -260,34 +273,26 @@ so world = profile-meters × 100 − 50400 on both axes. Profile coords below wi
 - Landing craft (Zone 0, ramp faces +Y inland): A-left 230/270 (−27400, −23400), B-center 510/270 (600, −23400), C-right 790/270 (28600, −23400)
 - Bunkers (Zone 4, slit faces −Y sea): MG-left 200/620 (−30400, 11600), MG-center 510/635 (600, 13100), MG-right 800/620 (29600, 11600)
 
-## What Was Done (last session — 2026-08-02, second sitting)
+## What Was Done (last session — 2026-08-06)
 
-- First telemetry session analyzed (session_20260802_170635, 3 runs). Findings:
-  (1) spawn-lock — empty beach at t=0 made the player the sole target, all three guns
-  locked on at t=0.01 and killed them at the craft in ~1 s, twice; (2) once ~20 allies
-  were alive the player became statistically invisible — targeted 3× in 49 s, 66 aimed
-  shots, 0 hits, walked 398 m straight up the center to Z4 untouched (sprint-through
-  exploit, inverse of the hang-back one); (3) all three guns' stop clocks ran in sync
-  (simultaneous barrel change at 9.9 s) — battery-wide silence instead of per-gun windows
-- Fixed (1) with ally-sim pre-warm (PreWarmSeconds) and (3) with randomized starting
-  belt/heat (StartingBeltFractionMin / StartingHeatFractionMax). Compiled clean.
-  Finding (2) deliberately NOT acted on yet — needs more runs with the pre-warm live
-  before judging whether player priority needs a knob (sprint 900 already earns the max
-  MovingTargetScoreBonus once a gun considers the player at all)
-- Player run speed deliberately unchanged: the walk-through was a targeting failure, not
-  a speed problem; locomotion rates are foot-true at 600/900; zone transit times are
-  measured at the fog walkthrough
-- Earlier sitting: playtest telemetry built (FPlaytestRecorder → CSV per PIE session,
-  on-death run summaries, Tools/AnalyzePlaytests.bat → tables + heatmap PNG); user
-  re-ran Tools/PlaceMGCrew.py in-editor (3 guns per Decision 033)
-- Second batch analyzed (3 sessions, 9 runs, pre-warm + desync live): both fixes verified
-  in the CSVs (guns open on allies at t=0.01; stops staggered). Survival median rose from
-  0.9 s to ~20 s with deaths now landing in Z3. But sprint-through still reached Z4 in
-  every run that survived past Z3: 367 aimed shots produced 8 hits (2.2%), 7 of them from
-  the center gun against a player charging straight at it — no-lead firing meant flank
-  fire missed a sprinter systematically. Target leading added in response (see MG bunker
-  entry); not yet play-tested
-- REMAINING: user verifies spawns in viewport, saves level, feel-checks with telemetry.
-  Next batch tests the leading — sprint-through up the center should now die to the
-  flanks, making cover use / stop windows (the actual Step 3 checklist questions)
-  testable for the first time
+- Third telemetry batch analyzed (session_20260806_212149, 4 runs, target leading live).
+  Leading VERIFIED: kills now come from all three guns including both flanks (previously
+  7 of 8 hits were center-gun-only), deaths land in Z3. User's felt reads all confirmed
+  by data:
+  - **Blind spot**: run 4 spent 8.5 s outside every gun's traverse arc at the seam
+    between the center and left bunkers near the defense line (x ≈ −8500..−7300,
+    upper Z3 and beyond). Geometric: SlitArcHalfAngleDeg 55 + 30° toe-in can't cover
+    the near-line seams. Ruled by-design — Z3 enemy infantry owns that band later
+  - **Too easy / not intense (same root cause)**: player targeted 4–17% of the time,
+    95% of MG fire at sim allies, 87% of ground gained while clear, sprinting 93–97%
+    of every run, cracks 1–7 per run. Player-priority knob now justified (the decision
+    deferred on 2026-08-02 finding 2 — two batches, same pattern)
+  - **Distance feels short**: measured under free-sprint — hold terrain, re-judge after
+    priority fix + fog (zone sizing already booked to the fog walkthrough)
+  - Guns also spend ~40% of life stopped (avg 1.2 of 3 down; belt and heat cycle at
+    similar periods) — deliberately untouched until being targeted matters
+- Built the bullet sound layer (user priority for intensity): MGImpact placeholder +
+  world-impact playback + crack rework with distance-scaled volume and spatialization
+  (see What Exists). Compiled clean via Build.bat; MGImpact.uasset disk-verified from a
+  fresh process. Player-priority knob NOT yet implemented — next code change
+- REMAINING: feel-check sounds in PIE, then implement the priority knob and re-batch

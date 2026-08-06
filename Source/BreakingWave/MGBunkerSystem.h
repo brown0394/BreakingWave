@@ -12,6 +12,7 @@ class UAudioComponent;
 class USceneComponent;
 class USkeletalMeshComponent;
 class UStaticMeshComponent;
+class USoundAttenuation;
 class USoundBase;
 
 UENUM()
@@ -216,7 +217,29 @@ struct FMGSettings
 
 	/** Bullet passing within this range of the player's head snaps a supersonic crack */
 	UPROPERTY(EditAnywhere, Category = "MG|Audio")
-	float CrackRadius = 300.f;
+	float CrackRadius = 1000.f;
+
+	/** Crack volume fades from full at a head-graze down to this at CrackRadius */
+	UPROPERTY(EditAnywhere, Category = "MG|Audio")
+	float CrackVolumeAtEdge = 0.35f;
+
+	UPROPERTY(EditAnywhere, Category = "MG|Audio")
+	float CrackPitchVariance = 0.08f;
+
+	/** Bullets striking ground/objects within this range of the player play an impact sound */
+	UPROPERTY(EditAnywhere, Category = "MG|Audio")
+	float ImpactSoundRadius = 5000.f;
+
+	/** Impact plays at full volume inside this, then falls off toward ImpactSoundRadius */
+	UPROPERTY(EditAnywhere, Category = "MG|Audio")
+	float ImpactSoundInnerRadius = 400.f;
+
+	UPROPERTY(EditAnywhere, Category = "MG|Audio")
+	float ImpactPitchVariance = 0.15f;
+
+	/** Floor between consecutive impact sounds — caps mixer load when 3 guns land 60 rounds/sec */
+	UPROPERTY(EditAnywhere, Category = "MG|Audio")
+	float ImpactSoundMinInterval = 0.03f;
 
 	UPROPERTY(EditAnywhere, Category = "MG|Audio")
 	float SpeedOfSound = 34300.f;
@@ -373,6 +396,9 @@ protected:
 	UPROPERTY(EditAnywhere, Category = "MG", meta = (ShowOnlyInnerProperties))
 	FMGSettings Settings;
 
+	UPROPERTY(EditAnywhere, Category = "Audio")
+	USoundBase* ImpactSound = nullptr;
+
 private:
 	void UpdateBunker(FMGBunkerState& State, int32 BunkerIndex, float DeltaSeconds);
 
@@ -422,6 +448,14 @@ private:
 	ABreakingWaveCharacter* GetPlayerCharacter() const;
 
 	void DrawDebugState() const;
+
+	UPROPERTY(Transient)
+	USoundAttenuation* ImpactAttenuation = nullptr;
+
+	UPROPERTY(Transient)
+	USoundAttenuation* CrackAttenuation = nullptr;
+
+	float LastImpactSoundTime = -1.f;
 
 	TArray<FMGBunkerState> Bunkers;
 

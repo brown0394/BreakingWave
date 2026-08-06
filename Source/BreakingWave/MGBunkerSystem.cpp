@@ -14,6 +14,7 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PlayerController.h"
 #include "Kismet/GameplayStatics.h"
+#include "Sound/SoundAttenuation.h"
 #include "TimerManager.h"
 
 AMGBunkerGun::AMGBunkerGun()
@@ -139,6 +140,19 @@ void AMGBunkerManager::BeginPlay()
 		It->SetRenderedCrewCount(2);
 		Bunkers.Add(State);
 	}
+
+	if (ImpactSound == nullptr)
+	{
+		ImpactSound = LoadObject<USoundBase>(nullptr, TEXT("/Game/Audio/MGImpact.MGImpact"));
+	}
+
+	ImpactAttenuation = NewObject<USoundAttenuation>(this);
+	ImpactAttenuation->Attenuation.AttenuationShapeExtents = FVector(Settings.ImpactSoundInnerRadius, 0.f, 0.f);
+	ImpactAttenuation->Attenuation.FalloffDistance = FMath::Max(Settings.ImpactSoundRadius - Settings.ImpactSoundInnerRadius, 1.f);
+
+	CrackAttenuation = NewObject<USoundAttenuation>(this);
+	CrackAttenuation->Attenuation.AttenuationShapeExtents = FVector(150.f, 0.f, 0.f);
+	CrackAttenuation->Attenuation.FalloffDistance = Settings.CrackRadius * 3.f;
 
 	Recorder.BeginSession(GetWorld(), Settings, AllySim.IsValid() ? &AllySim->GetSettings() : nullptr);
 }
@@ -694,7 +708,8 @@ void AMGBunkerManager::UpdateBullets(float DeltaSeconds)
 		if (!Bullet.bCrackPlayed && Player != nullptr)
 		{
 			const FVector NearPoint = FMath::ClosestPointOnSegment(PlayerHead, Start, TravelEnd);
-			if (FVector::Dist(NearPoint, PlayerHead) < Settings.CrackRadius)
+			const float MissDistance = FVector::Dist(NearPoint, PlayerHead);
+			if (MissDistance < Settings.CrackRadius)
 			{
 				Bullet.bCrackPlayed = true;
 				Recorder.LogCrack(Bullet.SourceBunkerIndex, NearPoint);
@@ -702,7 +717,12 @@ void AMGBunkerManager::UpdateBullets(float DeltaSeconds)
 				{
 					if (USoundBase* Crack = Bunkers[Bullet.SourceBunkerIndex].Gun->GetCrackSound())
 					{
-						UGameplayStatics::PlaySoundAtLocation(GetWorld(), Crack, NearPoint);
+						const float Volume = FMath::Lerp(1.f, Settings.CrackVolumeAtEdge,
+							MissDistance / Settings.CrackRadius);
+						const float Pitch = FMath::FRandRange(
+							1.f - Settings.CrackPitchVariance, 1.f + Settings.CrackPitchVariance);
+						UGameplayStatics::PlaySoundAtLocation(GetWorld(), Crack, NearPoint,
+							FRotator::ZeroRotator, Volume, Pitch, 0.f, CrackAttenuation);
 					}
 				}
 			}
@@ -719,6 +739,16 @@ void AMGBunkerManager::UpdateBullets(float DeltaSeconds)
 			DrawDebugPoint(GetWorld(), HitPoint, 6.f, FColor(240, 220, 140), false, 0.4f);
 #endif
 			Recorder.LogImpact(Bullet.SourceBunkerIndex, HitPoint);
+			if (ImpactSound != nullptr && Player != nullptr
+				&& FVector::Dist(HitPoint, PlayerHead) < Settings.ImpactSoundRadius
+				&& GetWorld()->GetTimeSeconds() - LastImpactSoundTime >= Settings.ImpactSoundMinInterval)
+			{
+				LastImpactSoundTime = GetWorld()->GetTimeSeconds();
+				const float Pitch = FMath::FRandRange(
+					1.f - Settings.ImpactPitchVariance, 1.f + Settings.ImpactPitchVariance);
+				UGameplayStatics::PlaySoundAtLocation(GetWorld(), ImpactSound, HitPoint,
+					FRotator::ZeroRotator, 1.f, Pitch, 0.f, ImpactAttenuation);
+			}
 			Bullets.RemoveAtSwap(i);
 			break;
 		case EHit::Ally:
