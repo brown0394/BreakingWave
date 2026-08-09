@@ -1,6 +1,6 @@
 # Current Status
 
-> Last updated: 2026-08-06
+> Last updated: 2026-08-09
 >
 > This document holds the CURRENT state and what's next — nothing else. Session history
 > lives in git log; the why of past choices lives in 03_DECISIONS.md; engine gotchas live
@@ -132,21 +132,31 @@ more system work (user decision 2026-07-04) — pick them up before tuning zone 
   play, so the player lands mid-wave — fixes the first-session spawn-lock, where an empty
   beach made the player the only target and all three guns killed them at the craft in
   under a second (twice)
-- [x] Placeholder audio: /Game/Audio/MGFireLoop (looping) + MGCrack + MGImpact (all
-  synthesized, disk-verified); regenerate via Tools/GenerateMGPlaceholderAudio.py
-  (headless OK)
-- [x] Bullet sound feedback (2026-08-06): world impacts within ImpactSoundRadius (50 m)
-  of the player play MGImpact at the impact point (ImpactSoundMinInterval throttle caps
-  mixer load at 60 rounds/sec battery-wide, pitch jitter for variety); flyby crack
-  reworked — CrackRadius 300 → 1000 (a miss within 10 m of the head now cracks), volume
-  fades from full at a graze to CrackVolumeAtEdge at the radius so loudness reads as
-  closeness, pitch jitter. Both play through runtime USoundAttenuation objects built in
-  BeginPlay, so they are properly spatialized + distance-attenuated (the old crack
-  played flat, unspatialized, full volume). Knobs in FMGSettings "MG|Audio". ImpactSound
-  lives on the manager — BeginPlay falls back to /Game/Audio/MGImpact if unset, and
-  PlaceMGCrew.py wires it on any future re-run (no re-run needed to hear it).
-  Compiled clean; not yet feel-checked. Telemetry note: crack counts from sessions
-  before 2026-08-06 were recorded at radius 300 — not comparable with new sessions
+- [x] Placeholder audio: /Game/Audio/MGFireLoop (looping) + MGCrack + MGImpact + MGWhizz
+  (all synthesized, disk-verified); regenerate via Tools/GenerateMGPlaceholderAudio.py
+  (headless OK — pass the script as an ABSOLUTE path or -script resolves against the
+  engine Binaries dir; the per-sound BINKA-decoder ensures in the log are harmless)
+- [x] Bullet sound feedback (2026-08-06, crack feel-checked GOOD 2026-08-09): world
+  impacts within ImpactSoundRadius (50 m) of the player play MGImpact at the impact
+  point (ImpactSoundMinInterval throttle caps mixer load at 60 rounds/sec battery-wide,
+  pitch jitter for variety); crack volume fades from full at a graze to
+  CrackVolumeAtEdge so loudness reads as closeness. All flyby/impact sounds play
+  through runtime USoundAttenuation objects built in BeginPlay, so they are properly
+  spatialized + distance-attenuated. Knobs in FMGSettings "MG|Audio"
+- [x] Passing-bullet whizz, distance-banded with the crack (2026-08-09, user-picked
+  banding): CrackRadius back to 300 — the crack is now the ALMOST-HIT signal (within
+  3 m of the head); a bullet passing between CrackRadius and WhizzRadius (1500) plays
+  the new MGWhizz "phewww" instead (synthesized falling 1500→400 Hz pitch sweep, reads
+  as a bullet Doppler-ing past), volume fades from full at the crack boundary to
+  WhizzVolumeAtEdge (0.25) at the outer edge, pitch jitter, own runtime attenuation.
+  Flyby detection now waits until the bullet's closest approach is KNOWN (passed abeam
+  or terminated) before banding — the old per-segment check could fire a tick early and
+  would have misfiled real near-hits as whizzes. WhizzSound lives on the manager with a
+  BeginPlay fallback-load of /Game/Audio/MGWhizz (no PlaceMGCrew re-run needed).
+  Compiled clean via Build.bat; whizz not yet feel-checked. Telemetry: new "whizz" CSV
+  event + whizzes= in run summaries + analyzer column (old sessions read 0). CRACK
+  COUNTS CHANGE MEANING AGAIN — now the 3 m band only; not comparable with any session
+  before 2026-08-09
 - [x] Playtest telemetry (PlaytestRecorder.h/.cpp, built 2026-08-02): FPlaytestRecorder
   lives inside AMGBunkerManager and auto-records every PIE session to
   Saved/Playtests/session_<stamp>.csv — settings snapshot (FMGSettings + FAllySimSettings
@@ -223,13 +233,13 @@ more system work (user decision 2026-07-04) — pick them up before tuning zone 
 
 ## Next Steps
 
-- [ ] **RESUME HERE — feel-check the new bullet sounds, then decide the player-priority
-  knob**:
-  1. Hit Play, run the beach — listen for impact thuds landing around you and directional
-     cracks on near misses (crack loudness now reads as closeness; radius is 10 m).
-     Tune in FMGSettings "MG|Audio" if impacts spam or cracks feel weak
-  2. After the runs: `Tools\AnalyzePlaytests.bat` (crack counts will jump vs pre-2026-08-06
-     sessions — radius widened 300 → 1000, not comparable)
+- [ ] **RESUME HERE — feel-check the whizz band, then the player-priority knob**:
+  1. Hit Play, run the beach — crack (feel-checked good 2026-08-09) now only fires
+     within 3 m of the head; passes in the 3–15 m band play the new whizz "phewww".
+     Listen for the band reading as distance: whizz = fire in your area, crack = almost
+     hit. Tune CrackRadius/WhizzRadius/WhizzVolumeAtEdge in FMGSettings "MG|Audio"
+  2. After the runs: `Tools\AnalyzePlaytests.bat` (new whizz column; crack counts now
+     mean the 3 m band only — not comparable with sessions before 2026-08-09)
   3. **Pending decision (data ready)**: player-priority knob. Two batches show the player
      targeted only 4–17% of the time, 95% of fire going at sim allies, 87% of ground
      gained while clear — the shared root cause of "too easy" and "not intense"
@@ -273,7 +283,15 @@ so world = profile-meters × 100 − 50400 on both axes. Profile coords below wi
 - Landing craft (Zone 0, ramp faces +Y inland): A-left 230/270 (−27400, −23400), B-center 510/270 (600, −23400), C-right 790/270 (28600, −23400)
 - Bunkers (Zone 4, slit faces −Y sea): MG-left 200/620 (−30400, 11600), MG-center 510/635 (600, 13100), MG-right 800/620 (29600, 11600)
 
-## What Was Done (last session — 2026-08-06)
+## What Was Done (last session — 2026-08-09)
+
+- Crack sound feel-checked GOOD by the user (spatialization + closeness-volume read well)
+- Built the passing-bullet whizz layer (user request; banding user-picked from three
+  options): distance-banded crack/whizz split, closest-approach-known gate, MGWhizz
+  synthesized + imported (headless), telemetry whizz event + analyzer column. Compiled
+  clean; whizz feel-check is the next session's first move, then the priority knob
+
+## What Was Done (2026-08-06)
 
 - Third telemetry batch analyzed (session_20260806_212149, 4 runs, target leading live).
   Leading VERIFIED: kills now come from all three guns including both flanks (previously

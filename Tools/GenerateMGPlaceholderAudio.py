@@ -1,7 +1,7 @@
 # Synthesizes the Step 3 placeholder MG sounds (Decision 028/030 audio: fire loop +
-# supersonic crack + ground impact), writes them to SourceAssets/, imports them to
-# /Game/Audio, and marks the fire loop as looping. Real sounds replace these in the
-# sound pass.
+# supersonic crack + ground impact + passing whizz), writes them to SourceAssets/,
+# imports them to /Game/Audio, and marks the fire loop as looping. Real sounds replace
+# these in the sound pass.
 #
 # Headless OK:
 #   UnrealEditor-Cmd.exe <uproject> -run=pythonscript -script="Tools/GenerateMGPlaceholderAudio.py"
@@ -81,6 +81,22 @@ def impact_samples():
     return smoothed
 
 
+def whizz_samples():
+    length = int(SAMPLE_RATE * 0.4)
+    out = []
+    phase = 0.0
+    smoothed_noise = 0.0
+    for i in range(length):
+        t = i / SAMPLE_RATE
+        progress = i / length
+        freq = 1500.0 - 1100.0 * progress
+        phase += 2.0 * math.pi * freq / SAMPLE_RATE
+        smoothed_noise += 0.18 * (random.uniform(-1.0, 1.0) - smoothed_noise)
+        envelope = min(t / 0.03, 1.0) * math.exp(-max(0.0, t - 0.03) / 0.13)
+        out.append(math.sin(phase) * (0.6 + 0.8 * smoothed_noise) * envelope)
+    return out
+
+
 def import_wav(filename):
     task = unreal.AssetImportTask()
     task.filename = os.path.join(SOURCE_DIR, filename)
@@ -108,10 +124,12 @@ def main():
     loop_wav = os.path.join(SOURCE_DIR, "MGFireLoop.wav")
     crack_wav = os.path.join(SOURCE_DIR, "MGCrack.wav")
     impact_wav = os.path.join(SOURCE_DIR, "MGImpact.wav")
+    whizz_wav = os.path.join(SOURCE_DIR, "MGWhizz.wav")
     write_wav(loop_wav, fire_loop_samples())
     write_wav(crack_wav, crack_samples())
     write_wav(impact_wav, impact_samples())
-    unreal.log_warning("WAVs written: %s, %s, %s" % (loop_wav, crack_wav, impact_wav))
+    write_wav(whizz_wav, whizz_samples())
+    unreal.log_warning("WAVs written: %s, %s, %s, %s" % (loop_wav, crack_wav, impact_wav, whizz_wav))
 
     loop_path, loop_asset = import_wav("MGFireLoop.wav")
     loop_asset.set_editor_property("looping", True)
@@ -123,8 +141,11 @@ def main():
     impact_path, _ = import_wav("MGImpact.wav")
     save_checked(impact_path)
 
-    unreal.log_warning("Imported and saved: %s (looping), %s, %s"
-                       % (loop_path, crack_path, impact_path))
+    whizz_path, _ = import_wav("MGWhizz.wav")
+    save_checked(whizz_path)
+
+    unreal.log_warning("Imported and saved: %s (looping), %s, %s, %s"
+                       % (loop_path, crack_path, impact_path, whizz_path))
 
 
 main()

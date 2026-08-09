@@ -215,9 +215,9 @@ struct FMGSettings
 	UPROPERTY(EditAnywhere, Category = "MG|Priority")
 	float SharedTargetScorePenalty = 0.5f;
 
-	/** Bullet passing within this range of the player's head snaps a supersonic crack */
+	/** Bullet passing within this range of the player's head snaps a supersonic crack — the almost-hit band */
 	UPROPERTY(EditAnywhere, Category = "MG|Audio")
-	float CrackRadius = 1000.f;
+	float CrackRadius = 300.f;
 
 	/** Crack volume fades from full at a head-graze down to this at CrackRadius */
 	UPROPERTY(EditAnywhere, Category = "MG|Audio")
@@ -225,6 +225,17 @@ struct FMGSettings
 
 	UPROPERTY(EditAnywhere, Category = "MG|Audio")
 	float CrackPitchVariance = 0.08f;
+
+	/** Bullet passing between CrackRadius and this whizzes instead — fire in your area, not almost a hit */
+	UPROPERTY(EditAnywhere, Category = "MG|Audio")
+	float WhizzRadius = 1500.f;
+
+	/** Whizz volume fades from full at CrackRadius down to this at WhizzRadius */
+	UPROPERTY(EditAnywhere, Category = "MG|Audio")
+	float WhizzVolumeAtEdge = 0.25f;
+
+	UPROPERTY(EditAnywhere, Category = "MG|Audio")
+	float WhizzPitchVariance = 0.12f;
 
 	/** Bullets striking ground/objects within this range of the player play an impact sound */
 	UPROPERTY(EditAnywhere, Category = "MG|Audio")
@@ -399,6 +410,9 @@ protected:
 	UPROPERTY(EditAnywhere, Category = "Audio")
 	USoundBase* ImpactSound = nullptr;
 
+	UPROPERTY(EditAnywhere, Category = "Audio")
+	USoundBase* WhizzSound = nullptr;
+
 private:
 	void UpdateBunker(FMGBunkerState& State, int32 BunkerIndex, float DeltaSeconds);
 
@@ -454,6 +468,9 @@ private:
 
 	UPROPERTY(Transient)
 	USoundAttenuation* CrackAttenuation = nullptr;
+
+	UPROPERTY(Transient)
+	USoundAttenuation* WhizzAttenuation = nullptr;
 
 	float LastImpactSoundTime = -1.f;
 

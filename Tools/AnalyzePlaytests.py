@@ -113,6 +113,7 @@ def summarize_run(session, run_index, events):
         run["shots_at"] = int(x["shots_at"])
         run["hits"] = int(x["hits"])
         run["cracks"] = int(x["cracks"])
+        run["whizzes"] = int(x.get("whizzes", "0"))
         run["adv_targeted_m"] = float(x["adv_targeted"]) / 100.0
         run["adv_clear_m"] = float(x["adv_clear"]) / 100.0
         run["nodmg"] = x["nodmg"] == "1"
@@ -122,6 +123,7 @@ def summarize_run(session, run_index, events):
         run["shots_at"] = sum(1 for e in active if e["event"] == "shot" and e["extra"].get("tgt") == "-1")
         run["hits"] = sum(1 for e in active if e["event"] == "hit_player")
         run["cracks"] = sum(1 for e in active if e["event"] == "crack")
+        run["whizzes"] = sum(1 for e in active if e["event"] == "whizz")
         adv = {True: 0.0, False: 0.0}
         for prev, cur in zip(run["samples"], run["samples"][1:]):
             dy = cur["y"] - prev["y"]
@@ -139,7 +141,7 @@ def summarize_run(session, run_index, events):
 
 
 def print_runs(all_runs):
-    header = f"{'session':<18}{'run':>4}{'status':>9}{'dur s':>8}{'zone':>6}{'adv m':>8}{'shots@':>8}{'hits':>6}{'hit %':>7}{'cracks':>8}{'adv tgt':>9}{'adv clr':>9}  splits"
+    header = f"{'session':<18}{'run':>4}{'status':>9}{'dur s':>8}{'zone':>6}{'adv m':>8}{'shots@':>8}{'hits':>6}{'hit %':>7}{'cracks':>8}{'whizz':>7}{'adv tgt':>9}{'adv clr':>9}  splits"
     print(header)
     print("-" * len(header))
     for r in all_runs:
@@ -148,7 +150,7 @@ def print_runs(all_runs):
         tag = " [nodmg]" if r["nodmg"] else ""
         print(
             f"{r['session']:<18}{r['run']:>4}{r['status']:>9}{r['duration']:>8.1f}{r['end_zone']:>6}"
-            f"{r['advance_m']:>8.0f}{r['shots_at']:>8}{r['hits']:>6}{hit_pct:>7.1f}{r['cracks']:>8}"
+            f"{r['advance_m']:>8.0f}{r['shots_at']:>8}{r['hits']:>6}{hit_pct:>7.1f}{r['cracks']:>8}{r['whizzes']:>7}"
             f"{r['adv_targeted_m']:>9.0f}{r['adv_clear_m']:>9.0f}  {splits}{tag}"
         )
 

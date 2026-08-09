@@ -146,6 +146,11 @@ void AMGBunkerManager::BeginPlay()
 		ImpactSound = LoadObject<USoundBase>(nullptr, TEXT("/Game/Audio/MGImpact.MGImpact"));
 	}
 
+	if (WhizzSound == nullptr)
+	{
+		WhizzSound = LoadObject<USoundBase>(nullptr, TEXT("/Game/Audio/MGWhizz.MGWhizz"));
+	}
+
 	ImpactAttenuation = NewObject<USoundAttenuation>(this);
 	ImpactAttenuation->Attenuation.AttenuationShapeExtents = FVector(Settings.ImpactSoundInnerRadius, 0.f, 0.f);
 	ImpactAttenuation->Attenuation.FalloffDistance = FMath::Max(Settings.ImpactSoundRadius - Settings.ImpactSoundInnerRadius, 1.f);
@@ -153,6 +158,10 @@ void AMGBunkerManager::BeginPlay()
 	CrackAttenuation = NewObject<USoundAttenuation>(this);
 	CrackAttenuation->Attenuation.AttenuationShapeExtents = FVector(150.f, 0.f, 0.f);
 	CrackAttenuation->Attenuation.FalloffDistance = Settings.CrackRadius * 3.f;
+
+	WhizzAttenuation = NewObject<USoundAttenuation>(this);
+	WhizzAttenuation->Attenuation.AttenuationShapeExtents = FVector(150.f, 0.f, 0.f);
+	WhizzAttenuation->Attenuation.FalloffDistance = Settings.WhizzRadius * 3.f;
 
 	Recorder.BeginSession(GetWorld(), Settings, AllySim.IsValid() ? &AllySim->GetSettings() : nullptr);
 }
@@ -709,21 +718,37 @@ void AMGBunkerManager::UpdateBullets(float DeltaSeconds)
 		{
 			const FVector NearPoint = FMath::ClosestPointOnSegment(PlayerHead, Start, TravelEnd);
 			const float MissDistance = FVector::Dist(NearPoint, PlayerHead);
-			if (MissDistance < Settings.CrackRadius)
+			const bool bClosestApproachKnown = HitKind != EHit::None
+				|| FVector::DistSquared(NearPoint, TravelEnd) > 1.f;
+			if (MissDistance < Settings.WhizzRadius && bClosestApproachKnown)
 			{
 				Bullet.bCrackPlayed = true;
-				Recorder.LogCrack(Bullet.SourceBunkerIndex, NearPoint);
-				if (Bunkers.IsValidIndex(Bullet.SourceBunkerIndex) && Bunkers[Bullet.SourceBunkerIndex].Gun.IsValid())
+				if (MissDistance < Settings.CrackRadius)
 				{
-					if (USoundBase* Crack = Bunkers[Bullet.SourceBunkerIndex].Gun->GetCrackSound())
+					Recorder.LogCrack(Bullet.SourceBunkerIndex, NearPoint);
+					if (Bunkers.IsValidIndex(Bullet.SourceBunkerIndex) && Bunkers[Bullet.SourceBunkerIndex].Gun.IsValid())
 					{
-						const float Volume = FMath::Lerp(1.f, Settings.CrackVolumeAtEdge,
-							MissDistance / Settings.CrackRadius);
-						const float Pitch = FMath::FRandRange(
-							1.f - Settings.CrackPitchVariance, 1.f + Settings.CrackPitchVariance);
-						UGameplayStatics::PlaySoundAtLocation(GetWorld(), Crack, NearPoint,
-							FRotator::ZeroRotator, Volume, Pitch, 0.f, CrackAttenuation);
+						if (USoundBase* Crack = Bunkers[Bullet.SourceBunkerIndex].Gun->GetCrackSound())
+						{
+							const float Volume = FMath::Lerp(1.f, Settings.CrackVolumeAtEdge,
+								MissDistance / Settings.CrackRadius);
+							const float Pitch = FMath::FRandRange(
+								1.f - Settings.CrackPitchVariance, 1.f + Settings.CrackPitchVariance);
+							UGameplayStatics::PlaySoundAtLocation(GetWorld(), Crack, NearPoint,
+								FRotator::ZeroRotator, Volume, Pitch, 0.f, CrackAttenuation);
+						}
 					}
+				}
+				else if (WhizzSound != nullptr)
+				{
+					Recorder.LogWhizz(Bullet.SourceBunkerIndex, NearPoint);
+					const float BandFraction = (MissDistance - Settings.CrackRadius)
+						/ FMath::Max(Settings.WhizzRadius - Settings.CrackRadius, 1.f);
+					const float Volume = FMath::Lerp(1.f, Settings.WhizzVolumeAtEdge, BandFraction);
+					const float Pitch = FMath::FRandRange(
+						1.f - Settings.WhizzPitchVariance, 1.f + Settings.WhizzPitchVariance);
+					UGameplayStatics::PlaySoundAtLocation(GetWorld(), WhizzSound, NearPoint,
+						FRotator::ZeroRotator, Volume, Pitch, 0.f, WhizzAttenuation);
 				}
 			}
 		}

@@ -31,6 +31,7 @@ struct FPlaytestRunTally
 	int32 ShotsAtPlayer = 0;
 	int32 ShotsTotal = 0;
 	int32 CracksHeard = 0;
+	int32 WhizzesHeard = 0;
 	int32 PlayerHits = 0;
 	float AdvanceWhileTargetedCm = 0.f;
 	float AdvanceWhileClearCm = 0.f;
@@ -48,6 +49,7 @@ struct FPlaytestRecorder
 	void LogShot(int32 GunIndex, const FVector& FirePos, int32 TargetId);
 	void LogImpact(int32 GunIndex, const FVector& HitPoint);
 	void LogCrack(int32 GunIndex, const FVector& NearPoint);
+	void LogWhizz(int32 GunIndex, const FVector& NearPoint);
 	void LogAllyKilled(int32 GunIndex, const FVector& HitPoint);
 	void LogPlayerHit(int32 GunIndex, const FVector& HitPoint, bool bNoDamage);
 	void LogPlayerDeath(const FVector& DeathPos);

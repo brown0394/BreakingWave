@@ -157,6 +157,15 @@ void FPlaytestRecorder::LogCrack(int32 GunIndex, const FVector& NearPoint)
 	AppendEvent(TEXT("crack"), NearPoint, GunIndex, FString());
 }
 
+void FPlaytestRecorder::LogWhizz(int32 GunIndex, const FVector& NearPoint)
+{
+	if (bRunActive)
+	{
+		++Run.WhizzesHeard;
+	}
+	AppendEvent(TEXT("whizz"), NearPoint, GunIndex, FString());
+}
+
 void FPlaytestRecorder::LogAllyKilled(int32 GunIndex, const FVector& HitPoint)
 {
 	AppendEvent(TEXT("ally_death"), HitPoint, GunIndex, FString());
@@ -263,8 +272,8 @@ void FPlaytestRecorder::AppendSettingsDump(const TCHAR* Prefix, const UScriptStr
 
 FString FPlaytestRecorder::RunSummaryExtra() const
 {
-	return FString::Printf(TEXT("dur=%.1f;maxy=%.0f;shots_at=%d;hits=%d;cracks=%d;adv_targeted=%.0f;adv_clear=%.0f;nodmg=%d"),
-		Now() - Run.StartTime, Run.MaxY, Run.ShotsAtPlayer, Run.PlayerHits, Run.CracksHeard,
+	return FString::Printf(TEXT("dur=%.1f;maxy=%.0f;shots_at=%d;hits=%d;cracks=%d;whizzes=%d;adv_targeted=%.0f;adv_clear=%.0f;nodmg=%d"),
+		Now() - Run.StartTime, Run.MaxY, Run.ShotsAtPlayer, Run.PlayerHits, Run.CracksHeard, Run.WhizzesHeard,
 		Run.AdvanceWhileTargetedCm, Run.AdvanceWhileClearCm, Run.bNoDamageUsed ? 1 : 0);
 }
 
@@ -281,9 +290,9 @@ void FPlaytestRecorder::PrintRunSummary(const FVector& DeathPos) const
 	}
 	const float HitPercent = Run.ShotsAtPlayer > 0 ? 100.f * Run.PlayerHits / Run.ShotsAtPlayer : 0.f;
 	const FString Text = FString::Printf(
-		TEXT("RUN %d  %.1fs  died Zone %d  advanced %.0fm\nshots at you %d  hits %d (%.1f%%)  cracks %d\nadvance while targeted %.0fm | while clear %.0fm\nsplits: %s%s"),
+		TEXT("RUN %d  %.1fs  died Zone %d  advanced %.0fm\nshots at you %d  hits %d (%.1f%%)  cracks %d  whizzes %d\nadvance while targeted %.0fm | while clear %.0fm\nsplits: %s%s"),
 		Run.RunIndex, Duration, DeathZone, (Run.MaxY - Run.StartY) / 100.f,
-		Run.ShotsAtPlayer, Run.PlayerHits, HitPercent, Run.CracksHeard,
+		Run.ShotsAtPlayer, Run.PlayerHits, HitPercent, Run.CracksHeard, Run.WhizzesHeard,
 		Run.AdvanceWhileTargetedCm / 100.f, Run.AdvanceWhileClearCm / 100.f,
 		*Splits, Run.bNoDamageUsed ? TEXT("\n(no-damage used this run)") : TEXT(""));
 	UE_LOG(LogTemp, Log, TEXT("Playtest %s"), *Text);
