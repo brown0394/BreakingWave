@@ -30,6 +30,8 @@ struct FPlaytestRunTally
 	float MaxY = 0.f;
 	int32 ShotsAtPlayer = 0;
 	int32 ShotsTotal = 0;
+	int32 PlayerShotsFired = 0;
+	int32 InfantryDowned = 0;
 	int32 CracksHeard = 0;
 	int32 WhizzesHeard = 0;
 	int32 PlayerHits = 0;
@@ -47,6 +49,9 @@ struct FPlaytestRecorder
 	void SamplePlayer(const ABreakingWaveCharacter* Player, bool bTargetedByLiveGun, int32 StoppedGunCount, float DeltaSeconds);
 
 	void LogShot(int32 GunIndex, const FVector& FirePos, int32 TargetId);
+	void LogPlayerShot(const FVector& FirePos);
+	void LogInfantryShot(int32 SoldierIndex, const FVector& FirePos, int32 TargetId);
+	void LogInfantryDown(int32 SoldierIndex, const FVector& HitPoint);
 	void LogImpact(int32 GunIndex, const FVector& HitPoint);
 	void LogCrack(int32 GunIndex, const FVector& NearPoint);
 	void LogWhizz(int32 GunIndex, const FVector& NearPoint);

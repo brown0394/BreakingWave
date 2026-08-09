@@ -1,5 +1,7 @@
 #include "MGBunkerSystem.h"
 
+#include "BeachInfantrySystem.h"
+
 #include "BeachAllySim.h"
 #include "BreakingWaveCharacter.h"
 #include "Camera/CameraComponent.h"
@@ -123,6 +125,12 @@ void AMGBunkerManager::BeginPlay()
 		break;
 	}
 
+	for (TActorIterator<AInfantryManager> It(GetWorld()); It; ++It)
+	{
+		Infantry = *It;
+		break;
+	}
+
 	const int32 AwarenessSlots = (AllySim.IsValid() ? AllySim->GetSettings().MaxAlive : 0) + 1;
 
 	for (TActorIterator<AMGBunkerGun> It(GetWorld()); It; ++It)
@@ -150,6 +158,8 @@ void AMGBunkerManager::BeginPlay()
 	{
 		WhizzSound = LoadObject<USoundBase>(nullptr, TEXT("/Game/Audio/MGWhizz.MGWhizz"));
 	}
+
+	FallbackCrackSound = LoadObject<USoundBase>(nullptr, TEXT("/Game/Audio/MGCrack.MGCrack"));
 
 	ImpactAttenuation = NewObject<USoundAttenuation>(this);
 	ImpactAttenuation->Attenuation.AttenuationShapeExtents = FVector(Settings.ImpactSoundInnerRadius, 0.f, 0.f);
@@ -404,6 +414,16 @@ float AMGBunkerManager::ScoreTarget(const FMGBunkerState& State, int32 TargetId,
 		Score += 500.f * (1.f - SinceBroke / Settings.BrokeCoverWindowSeconds);
 	}
 
+	if (TargetId == PlayerTargetId)
+	{
+		const float SinceFiredUpon = Now - State.LastFiredUponTime;
+		if (SinceFiredUpon < Settings.FiredUponWindowSeconds)
+		{
+			Score += Settings.FiredUponScoreBonus * (1.f - SinceFiredUpon / Settings.FiredUponWindowSeconds);
+		}
+		Score *= Settings.PlayerTargetScoreMultiplier;
+	}
+
 	return Score;
 }
 
@@ -583,7 +603,8 @@ void AMGBunkerManager::FireRound(FMGBunkerState& State, int32 BunkerIndex)
 	Bullet.Position = State.Gun->GetFirePosition();
 	Bullet.Velocity = ShotDir * Settings.MuzzleVelocity;
 	Bullet.RemainingLife = Settings.BulletLifetime;
-	Bullet.SourceBunkerIndex = BunkerIndex;
+	Bullet.Source = EMGBulletSource::Gun;
+	Bullet.SourceIndex = BunkerIndex;
 	Bullets.Add(Bullet);
 
 	Recorder.LogShot(BunkerIndex, Bullet.Position, State.CurrentTargetId);
@@ -623,6 +644,37 @@ float AMGBunkerManager::StopDuration(const FMGBunkerState& State, EMGStop Stop) 
 	}
 }
 
+static int32 BulletShooterId(const FMGBullet& Bullet)
+{
+	switch (Bullet.Source)
+	{
+	case EMGBulletSource::Gun: return Bullet.SourceIndex;
+	case EMGBulletSource::PlayerRifle: return Playtest::PlayerTargetId;
+	default: return 1000 + Bullet.SourceIndex;
+	}
+}
+
+void AMGBunkerManager::SpawnBullet(EMGBulletSource Source, int32 SourceIndex, const FVector& Position, const FVector& Velocity,
+	int32 TargetId)
+{
+	FMGBullet Bullet;
+	Bullet.Position = Position;
+	Bullet.Velocity = Velocity;
+	Bullet.RemainingLife = Settings.BulletLifetime;
+	Bullet.Source = Source;
+	Bullet.SourceIndex = SourceIndex;
+	Bullets.Add(Bullet);
+
+	if (Source == EMGBulletSource::PlayerRifle)
+	{
+		Recorder.LogPlayerShot(Position);
+	}
+	else if (Source == EMGBulletSource::InfantryRifle)
+	{
+		Recorder.LogInfantryShot(SourceIndex, Position, TargetId);
+	}
+}
+
 void AMGBunkerManager::UpdateBullets(float DeltaSeconds)
 {
 	const ABreakingWaveCharacter* Player = GetPlayerCharacter();
@@ -651,8 +703,10 @@ void AMGBunkerManager::UpdateBullets(float DeltaSeconds)
 
 		float HitT = 2.f;
 		FVector HitPoint = End;
-		enum class EHit { None, World, Ally, Player } HitKind = EHit::None;
+		enum class EHit { None, World, Ally, Player, Crew, Soldier } HitKind = EHit::None;
 		int32 HitAllyIndex = -1;
+		int32 HitCrewBunkerIndex = -1;
+		const bool bPlayerBullet = Bullet.Source == EMGBulletSource::PlayerRifle;
 
 		FHitResult WorldHit;
 		if (GetWorld()->LineTraceSingleByChannel(WorldHit, Start, End, ECC_Visibility, Params))
@@ -662,7 +716,7 @@ void AMGBunkerManager::UpdateBullets(float DeltaSeconds)
 			HitKind = EHit::World;
 		}
 
-		if (AllySim.IsValid())
+		if (!bPlayerBullet && AllySim.IsValid())
 		{
 			const FAllySimSettings& AllySettings = AllySim->GetSettings();
 			TArray<FSimAlly>& Allies = AllySim->GetAllies();
@@ -691,7 +745,72 @@ void AMGBunkerManager::UpdateBullets(float DeltaSeconds)
 			}
 		}
 
-		if (Player != nullptr)
+		int32 HitSoldierIndex = -1;
+		if (bPlayerBullet && Infantry.IsValid())
+		{
+			for (int32 SoldierIndex = 0; SoldierIndex < Infantry->GetSoldierCount(); ++SoldierIndex)
+			{
+				FVector BodyBottom, BodyTop;
+				float BodyRadius = 0.f;
+				if (!Infantry->GetSoldierBodySegment(SoldierIndex, BodyBottom, BodyTop, BodyRadius))
+				{
+					continue;
+				}
+				FVector OnBullet, OnBody;
+				FMath::SegmentDistToSegmentSafe(Start, End, BodyBottom, BodyTop, OnBullet, OnBody);
+				if (FVector::Dist(OnBullet, OnBody) < BodyRadius)
+				{
+					const float T = FVector::Dist(Start, OnBullet) / FMath::Max(FVector::Dist(Start, End), 1.f);
+					if (T < HitT)
+					{
+						HitT = T;
+						HitPoint = OnBullet;
+						HitKind = EHit::Soldier;
+						HitSoldierIndex = SoldierIndex;
+					}
+				}
+			}
+		}
+
+		if (bPlayerBullet)
+		{
+			for (int32 BunkerIndex = 0; BunkerIndex < Bunkers.Num(); ++BunkerIndex)
+			{
+				const FMGBunkerState& State = Bunkers[BunkerIndex];
+				if (State.CrewAlive <= 0 || !State.Gun.IsValid())
+				{
+					continue;
+				}
+				const USkeletalMeshComponent* CrewMeshes[2] = { State.Gun->GunnerMesh, State.Gun->LoaderMesh };
+				const int32 RenderedCrew = FMath::Min(State.CrewAlive, 2);
+				for (int32 CrewIndex = 0; CrewIndex < RenderedCrew; ++CrewIndex)
+				{
+					const USkeletalMeshComponent* CrewMesh = CrewMeshes[CrewIndex];
+					if (CrewMesh == nullptr)
+					{
+						continue;
+					}
+					const FBoxSphereBounds CrewBounds = CrewMesh->Bounds;
+					const float AxisHalf = FMath::Max(CrewBounds.BoxExtent.Z - Settings.CrewHitRadius, 1.f);
+					const FVector AxisBottom = CrewBounds.Origin - FVector(0.f, 0.f, AxisHalf);
+					const FVector AxisTop = CrewBounds.Origin + FVector(0.f, 0.f, AxisHalf);
+					FVector OnBullet, OnBody;
+					FMath::SegmentDistToSegmentSafe(Start, End, AxisBottom, AxisTop, OnBullet, OnBody);
+					if (FVector::Dist(OnBullet, OnBody) < Settings.CrewHitRadius)
+					{
+						const float T = FVector::Dist(Start, OnBullet) / FMath::Max(FVector::Dist(Start, End), 1.f);
+						if (T < HitT)
+						{
+							HitT = T;
+							HitPoint = OnBullet;
+							HitKind = EHit::Crew;
+							HitCrewBunkerIndex = BunkerIndex;
+						}
+					}
+				}
+			}
+		}
+		else if (Player != nullptr)
 		{
 			const UCapsuleComponent* Capsule = Player->GetCapsuleComponent();
 			const FVector Center = Capsule->GetComponentLocation();
@@ -714,7 +833,7 @@ void AMGBunkerManager::UpdateBullets(float DeltaSeconds)
 
 		const FVector TravelEnd = HitKind == EHit::None ? End : HitPoint;
 
-		if (!Bullet.bCrackPlayed && Player != nullptr)
+		if (!bPlayerBullet && !Bullet.bCrackPlayed && Player != nullptr)
 		{
 			const FVector NearPoint = FMath::ClosestPointOnSegment(PlayerHead, Start, TravelEnd);
 			const float MissDistance = FVector::Dist(NearPoint, PlayerHead);
@@ -725,23 +844,27 @@ void AMGBunkerManager::UpdateBullets(float DeltaSeconds)
 				Bullet.bCrackPlayed = true;
 				if (MissDistance < Settings.CrackRadius)
 				{
-					Recorder.LogCrack(Bullet.SourceBunkerIndex, NearPoint);
-					if (Bunkers.IsValidIndex(Bullet.SourceBunkerIndex) && Bunkers[Bullet.SourceBunkerIndex].Gun.IsValid())
+					Recorder.LogCrack(BulletShooterId(Bullet), NearPoint);
+					USoundBase* Crack = FallbackCrackSound;
+					if (Bullet.Source == EMGBulletSource::Gun
+						&& Bunkers.IsValidIndex(Bullet.SourceIndex) && Bunkers[Bullet.SourceIndex].Gun.IsValid()
+						&& Bunkers[Bullet.SourceIndex].Gun->GetCrackSound() != nullptr)
 					{
-						if (USoundBase* Crack = Bunkers[Bullet.SourceBunkerIndex].Gun->GetCrackSound())
-						{
-							const float Volume = FMath::Lerp(1.f, Settings.CrackVolumeAtEdge,
-								MissDistance / Settings.CrackRadius);
-							const float Pitch = FMath::FRandRange(
-								1.f - Settings.CrackPitchVariance, 1.f + Settings.CrackPitchVariance);
-							UGameplayStatics::PlaySoundAtLocation(GetWorld(), Crack, NearPoint,
-								FRotator::ZeroRotator, Volume, Pitch, 0.f, CrackAttenuation);
-						}
+						Crack = Bunkers[Bullet.SourceIndex].Gun->GetCrackSound();
+					}
+					if (Crack != nullptr)
+					{
+						const float Volume = FMath::Lerp(1.f, Settings.CrackVolumeAtEdge,
+							MissDistance / Settings.CrackRadius);
+						const float Pitch = FMath::FRandRange(
+							1.f - Settings.CrackPitchVariance, 1.f + Settings.CrackPitchVariance);
+						UGameplayStatics::PlaySoundAtLocation(GetWorld(), Crack, NearPoint,
+							FRotator::ZeroRotator, Volume, Pitch, 0.f, CrackAttenuation);
 					}
 				}
 				else if (WhizzSound != nullptr)
 				{
-					Recorder.LogWhizz(Bullet.SourceBunkerIndex, NearPoint);
+					Recorder.LogWhizz(BulletShooterId(Bullet), NearPoint);
 					const float BandFraction = (MissDistance - Settings.CrackRadius)
 						/ FMath::Max(Settings.WhizzRadius - Settings.CrackRadius, 1.f);
 					const float Volume = FMath::Lerp(1.f, Settings.WhizzVolumeAtEdge, BandFraction);
@@ -754,7 +877,8 @@ void AMGBunkerManager::UpdateBullets(float DeltaSeconds)
 		}
 
 #if ENABLE_DRAW_DEBUG
-		DrawDebugLine(GetWorld(), Start, TravelEnd, FColor(255, 190, 90), false, 0.06f, 0, 1.5f);
+		DrawDebugLine(GetWorld(), Start, TravelEnd,
+			bPlayerBullet ? FColor(120, 200, 255) : FColor(255, 190, 90), false, 0.06f, 0, 1.5f);
 #endif
 
 		switch (HitKind)
@@ -763,7 +887,7 @@ void AMGBunkerManager::UpdateBullets(float DeltaSeconds)
 #if ENABLE_DRAW_DEBUG
 			DrawDebugPoint(GetWorld(), HitPoint, 6.f, FColor(240, 220, 140), false, 0.4f);
 #endif
-			Recorder.LogImpact(Bullet.SourceBunkerIndex, HitPoint);
+			Recorder.LogImpact(BulletShooterId(Bullet), HitPoint);
 			if (ImpactSound != nullptr && Player != nullptr
 				&& FVector::Dist(HitPoint, PlayerHead) < Settings.ImpactSoundRadius
 				&& GetWorld()->GetTimeSeconds() - LastImpactSoundTime >= Settings.ImpactSoundMinInterval)
@@ -774,15 +898,36 @@ void AMGBunkerManager::UpdateBullets(float DeltaSeconds)
 				UGameplayStatics::PlaySoundAtLocation(GetWorld(), ImpactSound, HitPoint,
 					FRotator::ZeroRotator, 1.f, Pitch, 0.f, ImpactAttenuation);
 			}
+			if (bPlayerBullet)
+			{
+				MarkFiredUponNear(HitPoint, GetWorld()->GetTimeSeconds());
+				if (Infantry.IsValid())
+				{
+					Infantry->NotifyImpactNear(HitPoint);
+				}
+			}
 			Bullets.RemoveAtSwap(i);
 			break;
 		case EHit::Ally:
 			AllySim->KillAlly(HitAllyIndex);
-			Recorder.LogAllyKilled(Bullet.SourceBunkerIndex, HitPoint);
+			Recorder.LogAllyKilled(BulletShooterId(Bullet), HitPoint);
 			Bullets.RemoveAtSwap(i);
 			break;
 		case EHit::Player:
-			HandlePlayerHit(Bullet.SourceBunkerIndex, HitPoint);
+			HandlePlayerHit(BulletShooterId(Bullet), HitPoint);
+			Bullets.RemoveAtSwap(i);
+			break;
+		case EHit::Crew:
+			KillCrewMemberOnBunker(HitCrewBunkerIndex);
+			if (Bunkers.IsValidIndex(HitCrewBunkerIndex))
+			{
+				Bunkers[HitCrewBunkerIndex].LastFiredUponTime = GetWorld()->GetTimeSeconds();
+			}
+			Bullets.RemoveAtSwap(i);
+			break;
+		case EHit::Soldier:
+			Infantry->NotifySoldierHit(HitSoldierIndex, HitPoint);
+			Recorder.LogInfantryDown(HitSoldierIndex, HitPoint);
 			Bullets.RemoveAtSwap(i);
 			break;
 		default:
@@ -936,35 +1081,55 @@ void AMGBunkerManager::ToggleNoDamage()
 	}
 }
 
+void AMGBunkerManager::KillCrewMemberOnBunker(int32 BunkerIndex)
+{
+	if (!Bunkers.IsValidIndex(BunkerIndex) || Bunkers[BunkerIndex].CrewAlive <= 0)
+	{
+		return;
+	}
+	FMGBunkerState& State = Bunkers[BunkerIndex];
+	--State.CrewAlive;
+	Recorder.LogCrewKilled(BunkerIndex, State.CrewAlive);
+	if (State.Gun.IsValid())
+	{
+		State.Gun->SetRenderedCrewCount(FMath::Min(State.CrewAlive, 2));
+	}
+	if (State.CrewAlive > 0)
+	{
+		StartStop(State, BunkerIndex, EMGStop::Takeover);
+	}
+	else
+	{
+		SyncFiringAudio(State, false);
+	}
+	if (GEngine != nullptr)
+	{
+		GEngine->AddOnScreenDebugMessage(103, 3.f, FColor::Orange,
+			FString::Printf(TEXT("MG crew member killed — %d remain"), State.CrewAlive));
+	}
+}
+
+void AMGBunkerManager::MarkFiredUponNear(const FVector& ImpactPoint, float Now)
+{
+	for (FMGBunkerState& State : Bunkers)
+	{
+		if (State.Gun.IsValid()
+			&& FVector::Dist(ImpactPoint, State.Gun->GetFirePosition()) < Settings.FiredUponAlertRadius)
+		{
+			State.LastFiredUponTime = Now;
+		}
+	}
+}
+
 void AMGBunkerManager::KillGunCrewMember()
 {
 	for (int32 BunkerIndex = 0; BunkerIndex < Bunkers.Num(); ++BunkerIndex)
 	{
-		FMGBunkerState& State = Bunkers[BunkerIndex];
-		if (State.CrewAlive <= 0)
+		if (Bunkers[BunkerIndex].CrewAlive > 0)
 		{
-			continue;
+			KillCrewMemberOnBunker(BunkerIndex);
+			return;
 		}
-		--State.CrewAlive;
-		Recorder.LogCrewKilled(BunkerIndex, State.CrewAlive);
-		if (State.Gun.IsValid())
-		{
-			State.Gun->SetRenderedCrewCount(FMath::Min(State.CrewAlive, 2));
-		}
-		if (State.CrewAlive > 0)
-		{
-			StartStop(State, BunkerIndex, EMGStop::Takeover);
-		}
-		else
-		{
-			SyncFiringAudio(State, false);
-		}
-		if (GEngine != nullptr)
-		{
-			GEngine->AddOnScreenDebugMessage(103, 3.f, FColor::Orange,
-				FString::Printf(TEXT("MG crew member killed — %d remain"), State.CrewAlive));
-		}
-		return;
 	}
 }
 
@@ -974,6 +1139,10 @@ void AMGBunkerManager::ToggleDebug()
 	if (AllySim.IsValid())
 	{
 		AllySim->SetDebugDraw(bDebug);
+	}
+	if (Infantry.IsValid())
+	{
+		Infantry->SetDebugDraw(bDebug);
 	}
 }
 

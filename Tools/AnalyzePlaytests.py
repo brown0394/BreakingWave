@@ -117,13 +117,17 @@ def summarize_run(session, run_index, events):
         run["adv_targeted_m"] = float(x["adv_targeted"]) / 100.0
         run["adv_clear_m"] = float(x["adv_clear"]) / 100.0
         run["nodmg"] = x["nodmg"] == "1"
+        run["pshots"] = int(x.get("pshots", "0"))
+        run["inf_down"] = int(x.get("inf_down", "0"))
     else:
         run["duration"] = active[-1]["t"] - start["t"] if active else 0.0
         run["max_y"] = max((e["y"] for e in run["samples"]), default=start["y"])
-        run["shots_at"] = sum(1 for e in active if e["event"] == "shot" and e["extra"].get("tgt") == "-1")
+        run["shots_at"] = sum(1 for e in active if e["event"] in ("shot", "inf_shot") and e["extra"].get("tgt") == "-1")
         run["hits"] = sum(1 for e in active if e["event"] == "hit_player")
         run["cracks"] = sum(1 for e in active if e["event"] == "crack")
         run["whizzes"] = sum(1 for e in active if e["event"] == "whizz")
+        run["pshots"] = sum(1 for e in active if e["event"] == "pshot")
+        run["inf_down"] = sum(1 for e in active if e["event"] == "inf_down")
         adv = {True: 0.0, False: 0.0}
         for prev, cur in zip(run["samples"], run["samples"][1:]):
             dy = cur["y"] - prev["y"]
@@ -141,7 +145,7 @@ def summarize_run(session, run_index, events):
 
 
 def print_runs(all_runs):
-    header = f"{'session':<18}{'run':>4}{'status':>9}{'dur s':>8}{'zone':>6}{'adv m':>8}{'shots@':>8}{'hits':>6}{'hit %':>7}{'cracks':>8}{'whizz':>7}{'adv tgt':>9}{'adv clr':>9}  splits"
+    header = f"{'session':<18}{'run':>4}{'status':>9}{'dur s':>8}{'zone':>6}{'adv m':>8}{'shots@':>8}{'hits':>6}{'hit %':>7}{'cracks':>8}{'whizz':>7}{'fired':>7}{'infdn':>7}{'adv tgt':>9}{'adv clr':>9}  splits"
     print(header)
     print("-" * len(header))
     for r in all_runs:
@@ -151,6 +155,7 @@ def print_runs(all_runs):
         print(
             f"{r['session']:<18}{r['run']:>4}{r['status']:>9}{r['duration']:>8.1f}{r['end_zone']:>6}"
             f"{r['advance_m']:>8.0f}{r['shots_at']:>8}{r['hits']:>6}{hit_pct:>7.1f}{r['cracks']:>8}{r['whizzes']:>7}"
+            f"{r['pshots']:>7}{r['inf_down']:>7}"
             f"{r['adv_targeted_m']:>9.0f}{r['adv_clear_m']:>9.0f}  {splits}{tag}"
         )
 
@@ -174,6 +179,10 @@ def print_aggregates(all_runs):
         total = adv_t + adv_c
         if total > 0:
             print(f"advance while targeted by a live gun: {adv_t:.0f}m ({100.0 * adv_t / total:.0f}%) | while clear: {adv_c:.0f}m ({100.0 * adv_c / total:.0f}%)")
+        fired = sum(r["pshots"] for r in deaths)
+        downed = sum(r["inf_down"] for r in deaths)
+        if fired or downed:
+            print(f"player rifle: {fired} rounds fired, {downed} infantry downed")
     for zone in range(1, len(ZONE_NAMES)):
         splits = [r["splits"][zone] for r in clean if zone in r["splits"]]
         if splits:
@@ -225,21 +234,29 @@ def render_maps(all_runs, sessions_events, out_path):
 
     ax = axes[1]
     draw_zone_lines(ax)
-    ax.set_title("MG fire concentration (bullet impacts)")
-    impacts = [(e["x"], e["y"]) for events in sessions_events for e in events if e["event"] == "impact"]
+    ax.set_title("enemy fire concentration (bullet impacts, player fire excluded)")
+    impacts = [(e["x"], e["y"]) for events in sessions_events for e in events
+               if e["event"] == "impact" and e["gun"] != -1]
     if impacts:
         ax.hist2d(*zip(*impacts), bins=[80, 50], range=[BEACH_X_RANGE, BEACH_Y_RANGE], cmap="inferno", cmin=1)
         draw_zone_lines(ax)
     guns = defaultdict(list)
+    soldiers = defaultdict(list)
     for events in sessions_events:
         for e in events:
             if e["event"] == "shot":
                 guns[e["gun"]].append((e["x"], e["y"]))
+            elif e["event"] == "inf_shot":
+                soldiers[e["gun"]].append((e["x"], e["y"]))
     for gun, positions in guns.items():
         gx = statistics.median(p[0] for p in positions)
         gy = statistics.median(p[1] for p in positions)
         ax.scatter([gx], [gy], s=60, marker="^", color="cyan")
         ax.text(gx, gy + 800, f"MG{gun}", fontsize=8, color="cyan", ha="center")
+    for soldier, positions in soldiers.items():
+        sx = statistics.median(p[0] for p in positions)
+        sy = statistics.median(p[1] for p in positions)
+        ax.scatter([sx], [sy], s=30, marker="v", color="orange")
 
     ax = axes[2]
     draw_zone_lines(ax)

@@ -6,7 +6,7 @@
 > lives in git log; the why of past choices lives in 03_DECISIONS.md; engine gotchas live
 > in 11_ENGINE_NOTES.md. When updating, replace stale facts instead of appending below them.
 
-## Phase: Step 3 — One MG (systems BUILT 2026-07-19; placement script + feel-check pending)
+## Phase: Step 3+ — MG live; shared rifle system + Z3 infantry BUILT 2026-08-09 (pulled forward from Step 6, Decisions 035–037; in-editor placement + feel-check pending)
 
 Spec was /grill-me'd question-by-question 2026-07-19 → Decisions 027–031. Step 3 scaffolding
 choices (not durable decisions): any MG hit = bare respawn at the landing craft (Step 4
@@ -157,6 +157,39 @@ more system work (user decision 2026-07-04) — pick them up before tuning zone 
   event + whizzes= in run summaries + analyzer column (old sessions read 0). CRACK
   COUNTS CHANGE MEANING AGAIN — now the 3 m band only; not comparable with any session
   before 2026-08-09
+- [x] Shared rifle system (Decision 035, built 2026-08-09): RifleProfile.h holds FRifleProfile
+  (one system, two data rows — player semi-auto/8, infantry bolt/5). Player side lives on
+  BreakingWaveCharacter: LMB semi-auto fire (camera-forward + spread cone), RMB aimed fire
+  (AimFieldOfView 55 lerp, movement locked while aiming), R reload (mag + dry click,
+  infinite reserves — looting deferred), SK_Rifle mesh on the FP arms' HandGrip_R socket,
+  template MM_Rifle_Fire/Reload/DryFire played as dynamic montages on "DefaultSlot"
+  (UNVERIFIED whether the template FP ABP has that slot — if arms don't animate in PIE,
+  that's why; sound still carries). Inputs IA_Fire/IA_AimRifle/IA_Reload wired via
+  Tools/AddRifleInput.py (run + disk-verified). Bullet pipeline generalized: FMGBullet
+  carries EMGBulletSource (Gun/PlayerRifle/InfantryRifle); player bullets down infantry
+  (one hit), kill MG crew through the slit (segment test vs rendered crew, CrewHitRadius),
+  pass through sim allies, and skip crack/whizz (your own rounds don't snap at your ear).
+  Rung 1 live: player rounds landing within FiredUponAlertRadius (600) of a gun's slit or
+  hitting crew set LastFiredUponTime on THAT gun → decaying FiredUponScoreBonus (800 over
+  6 s) on the player. PlayerTargetScoreMultiplier (3.0) CODED but UNTUNED — tune together
+  with infantry in one batch (Decision 035). Player bullet tracers draw pale blue.
+- [x] Z3 enemy infantry (BeachInfantrySystem.h/.cpp, Decision 036, built 2026-08-09):
+  AInfantryManager ticks FInfantrySoldierState structs — cover → rise → aim delay →
+  1–3 bolt shots → drop → randomized wait, per-soldier variance; flinch layer (player
+  impacts within FlinchRadius or a comrade death within ComradeDeathFlinchRadius drop a
+  risen soldier early and stretch his wait); targeting = distance × movement bonus ×
+  PlayerTargetScoreMultiplier vs player + sim allies, MaxEngagementRange (120 m) as the
+  fog stand-in; bolt rifle shots ride the shared bullet pipeline (crack/whizz for free),
+  RifleShotEnemy report + delayed RifleBoltCycle clack (the window tell, Decision 037);
+  one player hit downs a soldier → persistent ragdoll + comrade flinch. AInfantrySoldier
+  is a mannequin shell; anims fallback-load from AnimStarterPack/Retarget (5 infantry
+  anims retargeted + IK-baked 2026-08-09, disk-verified). RELOCATION (layer 3) and Z4
+  infantry DEFERRED — see Deferred section. F7 debug shows per-soldier phase/target/mag.
+  Knobs in FInfantrySettings on the manager. ALL NUMBERS TENTATIVE.
+- [x] Rifle placeholder audio (Decision 037): RifleShotPlayer/RifleShotEnemy/RifleBoltCycle/
+  RifleDryClick/RifleReload synthesized + imported via Tools/GenerateRifleAudio.py
+  (headless OK, disk-verified); character and infantry manager BeginPlay-fallback-load
+  them, no BP wiring needed
 - [x] Playtest telemetry (PlaytestRecorder.h/.cpp, built 2026-08-02): FPlaytestRecorder
   lives inside AMGBunkerManager and auto-records every PIE session to
   Saved/Playtests/session_<stamp>.csv — settings snapshot (FMGSettings + FAllySimSettings
@@ -213,6 +246,17 @@ more system work (user decision 2026-07-04) — pick them up before tuning zone 
   clip the slit jambs). One MGBunkerManager drives all guns (auto-discovers at BeginPlay).
   Idempotent (MGSystem tag); EDITOR-ONLY (spawning crashes headless). Re-run with 3 guns
   done 2026-08-02 (viewport check + level save still pending).
+- [x] Tools/AddRifleInput.py — creates IA_Fire/IA_AimRifle/IA_Reload, maps LMB/RMB/R in
+  IMC_Default, sets the BP action slots; idempotent, headless OK (already run, disk-verified)
+- [x] Tools/GenerateRifleAudio.py — synthesizes + imports the 5 rifle placeholder sounds;
+  idempotent, headless OK (already run, disk-verified)
+- [x] Tools/RetargetInfantryAnims.py — retargets the 5 ASP infantry-cycle anims reusing the
+  prone pass's rigs/retargeter; needs `-ExecutePythonScript` full-editor mode (already run;
+  BakeIKBonesFromFK.py re-run after, all 24 Retarget anims baked, disk-verified)
+- [ ] Tools/PlaceInfantryPositions.py — WRITTEN, NOT YET RUN (editor-only, spawning crashes
+  headless): places 2 seam-lane foxholes + center trench parapets, 7 AInfantrySoldier
+  shells, 1 AInfantryManager; idempotent (InfantrySystem tag); edit tables + re-run to move
+  positions
 - [x] Tools/AnalyzePlaytests.py (+ AnalyzePlaytests.bat) — offline analyzer for
   Saved/Playtests: per-run table, aggregates (median survival, zone-split medians, hit
   rate, advance-while-targeted vs clear), settings diffs between sessions, and
@@ -233,38 +277,52 @@ more system work (user decision 2026-07-04) — pick them up before tuning zone 
 
 ## Next Steps
 
-- [ ] **RESUME HERE — feel-check the whizz band, then the player-priority knob**:
-  1. Hit Play, run the beach — crack (feel-checked good 2026-08-09) now only fires
-     within 3 m of the head; passes in the 3–15 m band play the new whizz "phewww".
-     Listen for the band reading as distance: whizz = fire in your area, crack = almost
-     hit. Tune CrackRadius/WhizzRadius/WhizzVolumeAtEdge in FMGSettings "MG|Audio"
-  2. After the runs: `Tools\AnalyzePlaytests.bat` (new whizz column; crack counts now
-     mean the 3 m band only — not comparable with sessions before 2026-08-09)
-  3. **Pending decision (data ready)**: player-priority knob. Two batches show the player
-     targeted only 4–17% of the time, 95% of fire going at sim allies, 87% of ground
-     gained while clear — the shared root cause of "too easy" and "not intense"
-     (2026-08-06 analysis). Next code change unless the sound pass shifts the read
-  4. Step 3 checklist questions (hit frequency, crater survival, stop windows) stay open
-     until the priority fix makes being targeted routine
-  5. Debug aids: **F7** = debug readout; console `MGNoDamage` = observe without dying
-     (taints the run — analyzer excludes it), `MGKillCrew` = takeover windows
-  6. Tune in the Details panel: FMGSettings on MGBunkerManager, FAllySimSettings on
-     AllySimManager (each session CSV snapshots its settings). Record tuned values in
-     08_ENEMY_AI.md when it feels right, per the checklist
+- [ ] **RESUME HERE — place the infantry, then feel-check the rifle + Z3 firefight**:
+  1. In the editor (Lvl_FirstPerson open): run `Tools/PlaceInfantryPositions.py`
+     (Tools > Execute Python Script), then SAVE THE LEVEL. Idempotent — edit its tables
+     and re-run to move positions
+  2. Hit Play — rifle first: LMB hip fire, RMB aim (view narrows, movement locks),
+     R reload, empty mag dry-clicks. Shoot at a bunker slit: that gun should turn on
+     you within a beat (rung 1). Kill crew through the slit → takeover silence windows.
+     KNOWN UNCERTAINTY: FP arm animations may not play if the template FP ABP lacks a
+     "DefaultSlot" montage slot — rifle still fires/sounds; report what you see
+  3. Then Z3: bolt rifles crack past you with a "phewww" band, each report followed by
+     the bolt-cycle clack (his window — move on it). Suppress a foxhole with hip fire:
+     the soldier should duck early and stay down longer (flinch). One hit downs a
+     soldier; he ragdolls and stays. The seam lanes should now be owned by the foxholes
+  4. After the runs: `Tools\AnalyzePlaytests.bat` — new `fired`/`infdn` columns, player
+     rifle aggregate line, infantry markers (orange v) on the fire map, player fire
+     excluded from the enemy-fire heatmap
+  5. **Then, in one batch**: tune PlayerTargetScoreMultiplier (MG) +
+     FInfantrySettings.PlayerTargetScoreMultiplier + infantry knobs together — both
+     coded, both untuned (Decision 035). Step 3 checklist questions (hit frequency,
+     crater survival, stop windows) stay open until being targeted is routine
+  6. Debug aids: **F7** = MG + ally + infantry readout; `MGNoDamage` observe mode
+     (taints the run), `MGKillCrew` = takeover windows
   Greybox caveats: tracers converge on invisible sim allies (fog + rendered allies fix
-  that later — don't judge it now); any hit = instant respawn scaffolding, so the MG reads
-  ~2× more lethal than the final two-shot model — discount accordingly when tuning.
-  Known-by-design: the seam between bunkers close to the defense line sits outside every
-  gun's 55° slit arc (verified in run data 2026-08-06) — enemy infantry in Z3
-  (foxholes/trench, 05_ZONES.md) owns that band later; do not widen MG arcs for it.
-  Beach length judgment also deferred: 35–54 s Z0→Z4 was measured while free-sprinting
-  96% of the time — re-judge after the priority fix + fog, not before
+  that later); any hit = instant respawn scaffolding, so ALL enemy fire reads ~2× more
+  lethal than the final two-shot model; infantry can only be killed by the player's
+  rifle (nothing else shoots at them yet); soldiers re-emerge in the same spot until
+  the relocation layer is built — pre-aiming a known spot wins, expected, don't tune
+  around it. Beach length judgment still deferred: re-judge after the priority tuning
+  batch + fog, not before
 
 ### Writing backlog
 - [ ] Second character ("the one who shook me") narrative writing
 - [ ] First enemy character narrative writing
 
 ### Deferred until after more system work (decided 2026-07-04; transit times added 2026-07-18)
+- [ ] Infantry relocation (layer 3, Decision 036 — user wants this built later, on the
+  record): intra-trench sidesteps under concentrated fire, re-emerging from a different
+  spot after being shot at, falling back when the player closes, move sounds. Build after
+  the first infantry feel-check shows the pre-aim exploit actually biting
+- [ ] Z4 infantry — build together with communication-trench geometry and the bunker
+  breakthrough design (open question in 08_ENEMY_AI.md)
+- [ ] Dug-in foxhole/trench terrain (heightmap) replacing the parapet greybox — visual
+  pass, once infantry positions stop moving
+- [ ] FP arms rifle montages: if the template FP ABP turns out to have no DefaultSlot,
+  either add a Slot node to ABP_FP_Copy (headless graph edit, see 11_ENGINE_NOTES.md) or
+  live without arm motion until the visual pass
 - [ ] Fog setup — do this before judging zone sizes; fog is load-bearing.
   ExponentialHeightFog, tune by eye for ~35 m visibility: Density ~0.5,
   Height Falloff ~0.05, Start Distance ~500
@@ -283,13 +341,22 @@ so world = profile-meters × 100 − 50400 on both axes. Profile coords below wi
 - Landing craft (Zone 0, ramp faces +Y inland): A-left 230/270 (−27400, −23400), B-center 510/270 (600, −23400), C-right 790/270 (28600, −23400)
 - Bunkers (Zone 4, slit faces −Y sea): MG-left 200/620 (−30400, 11600), MG-center 510/635 (600, 13100), MG-right 800/620 (29600, 11600)
 
-## What Was Done (last session — 2026-08-09)
+## What Was Done (last session — 2026-08-09, second sitting)
 
-- Crack sound feel-checked GOOD by the user (spatialization + closeness-volume read well)
-- Built the passing-bullet whizz layer (user request; banding user-picked from three
-  options): distance-banded crack/whizz split, closest-approach-known gate, MGWhizz
-  synthesized + imported (headless), telemetry whizz event + analyzer column. Compiled
-  clean; whizz feel-check is the next session's first move, then the priority knob
+- Whizz feel-checked PASSED (user: whizz and crack read as different). Batch analyzed:
+  17 new runs, whizz counts sane (399 whizzes on an 82 s run — longest ever, died in Z4;
+  first Z4 deaths on record), core too-safe pattern unchanged (90% of advance while clear)
+- User reorder: enemy infantry before more MG work, rifle system first so player and
+  infantry share it. Spec /grill-me'd question-by-question → Decisions 035–037
+- Built the whole pass, all compiled clean via Build.bat: bullet pipeline faction
+  generalization + rung-1 + crew-kill-by-rifle; player rifle (hip/ADS/reload, inputs +
+  FP rifle mesh wired, disk-verified); 5 rifle placeholder sounds (synthesized, imported,
+  disk-verified); Z3 infantry system (cycle + flinch + targeting + ragdoll); 5 infantry
+  anims retargeted + IK-baked (disk-verified); PlaceInfantryPositions.py written (NOT
+  yet run — editor-only); telemetry pshot/inf_shot/inf_down events + analyzer columns.
+  MG PlayerTargetScoreMultiplier CODED untuned per Decision 035
+- REMAINING: run the placement script in-editor + save level, PIE feel-check (order in
+  Next Steps), then the one-batch priority + infantry tuning
 
 ## What Was Done (2026-08-06)
 

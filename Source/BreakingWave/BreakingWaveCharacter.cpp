@@ -9,6 +9,9 @@
 #include "Components/SkeletalMeshComponent.h"
 #include "EnhancedInputComponent.h"
 #include "InputActionValue.h"
+#include "Kismet/GameplayStatics.h"
+#include "Sound/SoundBase.h"
+#include "UObject/ConstructorHelpers.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/SpringArmComponent.h"
@@ -31,6 +34,36 @@ ABreakingWaveCharacter::ABreakingWaveCharacter()
 	FirstPersonMesh->SetOnlyOwnerSee(true);
 	FirstPersonMesh->FirstPersonPrimitiveType = EFirstPersonPrimitiveType::FirstPerson;
 	FirstPersonMesh->SetCollisionProfileName(FName("NoCollision"));
+
+	FirstPersonRifleMesh = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("First Person Rifle"));
+	FirstPersonRifleMesh->SetupAttachment(FirstPersonMesh, FName("HandGrip_R"));
+	FirstPersonRifleMesh->SetOnlyOwnerSee(true);
+	FirstPersonRifleMesh->FirstPersonPrimitiveType = EFirstPersonPrimitiveType::FirstPerson;
+	FirstPersonRifleMesh->SetCollisionProfileName(FName("NoCollision"));
+
+	static ConstructorHelpers::FObjectFinder<USkeletalMesh> RifleMeshFinder(TEXT("/Game/Weapons/Rifle/Meshes/SKM_Rifle.SKM_Rifle"));
+	if (RifleMeshFinder.Succeeded())
+	{
+		FirstPersonRifleMesh->SetSkeletalMesh(RifleMeshFinder.Object);
+	}
+
+	static ConstructorHelpers::FObjectFinder<UAnimSequence> FireAnimFinder(TEXT("/Game/Characters/Mannequins/Anims/Rifle/MM_Rifle_Fire.MM_Rifle_Fire"));
+	if (FireAnimFinder.Succeeded())
+	{
+		RifleFireAnim = FireAnimFinder.Object;
+	}
+
+	static ConstructorHelpers::FObjectFinder<UAnimSequence> ReloadAnimFinder(TEXT("/Game/Characters/Mannequins/Anims/Rifle/MM_Rifle_Reload.MM_Rifle_Reload"));
+	if (ReloadAnimFinder.Succeeded())
+	{
+		RifleReloadAnim = ReloadAnimFinder.Object;
+	}
+
+	static ConstructorHelpers::FObjectFinder<UAnimSequence> DryFireAnimFinder(TEXT("/Game/Characters/Mannequins/Anims/Rifle/MM_Rifle_DryFire.MM_Rifle_DryFire"));
+	if (DryFireAnimFinder.Succeeded())
+	{
+		RifleDryFireAnim = DryFireAnimFinder.Object;
+	}
 
 	// Create the Camera Component	
 	FirstPersonCameraComponent = CreateDefaultSubobject<UCameraComponent>(TEXT("First Person Camera"));
@@ -71,6 +104,22 @@ void ABreakingWaveCharacter::BeginPlay()
 	GetCharacterMovement()->MaxWalkSpeedCrouched = 0.f;
 	StandingFirstPersonMeshRelativeLocation = FirstPersonMesh->GetRelativeLocation();
 	StandingBodyAnimClass = GetMesh()->GetAnimClass();
+
+	MagRounds = RifleProfile.MagazineSize;
+	DefaultFieldOfView = FirstPersonCameraComponent->FieldOfView;
+
+	if (RifleShotSound == nullptr)
+	{
+		RifleShotSound = LoadObject<USoundBase>(nullptr, TEXT("/Game/Audio/RifleShotPlayer.RifleShotPlayer"));
+	}
+	if (RifleDryClickSound == nullptr)
+	{
+		RifleDryClickSound = LoadObject<USoundBase>(nullptr, TEXT("/Game/Audio/RifleDryClick.RifleDryClick"));
+	}
+	if (RifleReloadSound == nullptr)
+	{
+		RifleReloadSound = LoadObject<USoundBase>(nullptr, TEXT("/Game/Audio/RifleReload.RifleReload"));
+	}
 }
 
 void ABreakingWaveCharacter::NotifyControllerChanged()
@@ -104,6 +153,21 @@ void ABreakingWaveCharacter::SetupPlayerInputComponent(UInputComponent* PlayerIn
 		// Looking/Aiming
 		EnhancedInputComponent->BindAction(LookAction, ETriggerEvent::Triggered, this, &ABreakingWaveCharacter::LookInput);
 		EnhancedInputComponent->BindAction(MouseLookAction, ETriggerEvent::Triggered, this, &ABreakingWaveCharacter::LookInput);
+
+		// Rifle
+		if (FireAction != nullptr)
+		{
+			EnhancedInputComponent->BindAction(FireAction, ETriggerEvent::Started, this, &ABreakingWaveCharacter::DoFire);
+		}
+		if (AimAction != nullptr)
+		{
+			EnhancedInputComponent->BindAction(AimAction, ETriggerEvent::Started, this, &ABreakingWaveCharacter::DoAimStart);
+			EnhancedInputComponent->BindAction(AimAction, ETriggerEvent::Completed, this, &ABreakingWaveCharacter::DoAimEnd);
+		}
+		if (ReloadAction != nullptr)
+		{
+			EnhancedInputComponent->BindAction(ReloadAction, ETriggerEvent::Started, this, &ABreakingWaveCharacter::DoReload);
+		}
 	}
 	else
 	{
@@ -144,7 +208,7 @@ void ABreakingWaveCharacter::DoAim(float Yaw, float Pitch)
 
 void ABreakingWaveCharacter::DoMove(float Right, float Forward)
 {
-	if (GetController() && !IsProne() && !IsProneTransitionActive())
+	if (GetController() && !IsProne() && !IsProneTransitionActive() && !bAiming)
 	{
 		// pass the move inputs
 		AddMovementInput(GetActorRightVector(), Right);
@@ -222,6 +286,13 @@ void ABreakingWaveCharacter::OnEndCrouch(float HalfHeightAdjust, float ScaledHal
 void ABreakingWaveCharacter::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
+
+	const float TargetFov = bAiming ? AimFieldOfView : DefaultFieldOfView;
+	if (!FMath::IsNearlyEqual(FirstPersonCameraComponent->FieldOfView, TargetFov, 0.01f))
+	{
+		FirstPersonCameraComponent->SetFieldOfView(
+			FMath::FInterpTo(FirstPersonCameraComponent->FieldOfView, TargetFov, DeltaSeconds, AimFovBlendSpeed));
+	}
 
 	if (bSlideActive && GetCharacterMovement()->Velocity.Size2D() <= SlideSettleSpeed)
 	{
@@ -414,4 +485,100 @@ void ABreakingWaveCharacter::DoSprintStart()
 void ABreakingWaveCharacter::DoSprintEnd()
 {
 	GetCharacterMovement()->MaxWalkSpeed = WalkSpeed;
+}
+
+void ABreakingWaveCharacter::DoFire()
+{
+	const float Now = GetWorld()->GetTimeSeconds();
+	if (bReloading || IsProneTransitionActive() || Now - LastShotTime < RifleProfile.FireIntervalSeconds)
+	{
+		return;
+	}
+
+	if (MagRounds <= 0)
+	{
+		if (RifleDryClickSound != nullptr)
+		{
+			UGameplayStatics::PlaySound2D(this, RifleDryClickSound);
+		}
+		PlayFirstPersonAnim(RifleDryFireAnim);
+		LastShotTime = Now;
+		return;
+	}
+
+	LastShotTime = Now;
+	--MagRounds;
+
+	const FVector CameraLocation = FirstPersonCameraComponent->GetComponentLocation();
+	const FVector CameraForward = FirstPersonCameraComponent->GetForwardVector();
+	const float SpreadDeg = bAiming ? RifleProfile.AimSpreadDeg : RifleProfile.HipSpreadDeg;
+	const FVector ShotDir = FMath::VRandCone(CameraForward, FMath::DegreesToRadians(SpreadDeg));
+
+	if (AMGBunkerManager* Manager = GetBunkerManager())
+	{
+		Manager->SpawnBullet(EMGBulletSource::PlayerRifle, 0,
+			CameraLocation + CameraForward * MuzzleSpawnForwardOffset, ShotDir * RifleProfile.MuzzleVelocity);
+	}
+
+	if (RifleShotSound != nullptr)
+	{
+		UGameplayStatics::PlaySound2D(this, RifleShotSound, 1.f, FMath::FRandRange(0.96f, 1.04f));
+	}
+	PlayFirstPersonAnim(RifleFireAnim);
+}
+
+void ABreakingWaveCharacter::DoAimStart()
+{
+	bAiming = true;
+}
+
+void ABreakingWaveCharacter::DoAimEnd()
+{
+	bAiming = false;
+}
+
+void ABreakingWaveCharacter::DoReload()
+{
+	if (bReloading || MagRounds >= RifleProfile.MagazineSize)
+	{
+		return;
+	}
+	bReloading = true;
+	if (RifleReloadSound != nullptr)
+	{
+		UGameplayStatics::PlaySound2D(this, RifleReloadSound);
+	}
+	PlayFirstPersonAnim(RifleReloadAnim);
+	GetWorldTimerManager().SetTimer(ReloadTimer, this, &ABreakingWaveCharacter::FinishReload, RifleProfile.ReloadSeconds, false);
+}
+
+void ABreakingWaveCharacter::FinishReload()
+{
+	MagRounds = RifleProfile.MagazineSize;
+	bReloading = false;
+}
+
+void ABreakingWaveCharacter::PlayFirstPersonAnim(UAnimSequence* Anim)
+{
+	if (Anim == nullptr)
+	{
+		return;
+	}
+	if (UAnimInstance* AnimInstance = FirstPersonMesh->GetAnimInstance())
+	{
+		AnimInstance->PlaySlotAnimationAsDynamicMontage(Anim, FName("DefaultSlot"), 0.05f, 0.08f);
+	}
+}
+
+AMGBunkerManager* ABreakingWaveCharacter::GetBunkerManager()
+{
+	if (!CachedBunkerManager.IsValid())
+	{
+		for (TActorIterator<AMGBunkerManager> It(GetWorld()); It; ++It)
+		{
+			CachedBunkerManager = *It;
+			break;
+		}
+	}
+	return CachedBunkerManager.Get();
 }

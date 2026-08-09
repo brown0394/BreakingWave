@@ -7,6 +7,7 @@
 #include "GameFramework/Character.h"
 #include "HeadbobCameraShake.h"
 #include "Logging/LogMacros.h"
+#include "RifleProfile.h"
 #include "BreakingWaveCharacter.generated.h"
 
 class UInputComponent;
@@ -15,6 +16,8 @@ class UCameraComponent;
 class USpringArmComponent;
 class UInputAction;
 class UAnimSequence;
+class USoundBase;
+class AMGBunkerManager;
 struct FInputActionValue;
 
 DECLARE_LOG_CATEGORY_EXTERN(LogTemplateCharacter, Log, All);
@@ -30,6 +33,10 @@ class ABreakingWaveCharacter : public ACharacter
 	/** Pawn mesh: first person view (arms; seen only by self) */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components", meta = (AllowPrivateAccess = "true"))
 	USkeletalMeshComponent* FirstPersonMesh;
+
+	/** Rifle in the FP arms' grip socket; visual only, bullets spawn from the camera */
+	UPROPERTY(VisibleAnywhere, Category="Components", meta = (AllowPrivateAccess = "true"))
+	USkeletalMeshComponent* FirstPersonRifleMesh;
 
 	/** First person camera */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components", meta = (AllowPrivateAccess = "true"))
@@ -64,7 +71,19 @@ protected:
 	/** Mouse Look Input Action */
 	UPROPERTY(EditAnywhere, Category ="Input")
 	class UInputAction* MouseLookAction;
-	
+
+	/** Fire Input Action */
+	UPROPERTY(EditAnywhere, Category ="Input")
+	UInputAction* FireAction;
+
+	/** Aim (ADS) Input Action */
+	UPROPERTY(EditAnywhere, Category ="Input")
+	UInputAction* AimAction;
+
+	/** Reload Input Action */
+	UPROPERTY(EditAnywhere, Category ="Input")
+	UInputAction* ReloadAction;
+
 public:
 	ABreakingWaveCharacter();
 
@@ -95,6 +114,19 @@ protected:
 	/** Handles sprint end inputs from either controls or UI interfaces */
 	UFUNCTION(BlueprintCallable, Category="Input")
 	virtual void DoSprintEnd();
+
+	/** Semi-auto: one round per trigger pull; dry click when the mag runs empty */
+	UFUNCTION(BlueprintCallable, Category="Input")
+	virtual void DoFire();
+
+	UFUNCTION(BlueprintCallable, Category="Input")
+	virtual void DoAimStart();
+
+	UFUNCTION(BlueprintCallable, Category="Input")
+	virtual void DoAimEnd();
+
+	UFUNCTION(BlueprintCallable, Category="Input")
+	virtual void DoReload();
 
 	/** Movement speed while walking (default) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Movement")
@@ -136,6 +168,39 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Movement")
 	float ProneDiveFallGravityScale = 2.f;
 
+	/** The attacker's semi-auto rifle: shot per trigger pull, ~8-round mag (06_COMBAT.md firing) */
+	UPROPERTY(EditAnywhere, Category="Rifle")
+	FRifleProfile RifleProfile;
+
+	/** Aimed fire narrows the view; hip fire keeps the full field (no crosshair either way) */
+	UPROPERTY(EditAnywhere, Category="Rifle")
+	float AimFieldOfView = 55.f;
+
+	UPROPERTY(EditAnywhere, Category="Rifle")
+	float AimFovBlendSpeed = 12.f;
+
+	/** Bullets spawn this far ahead of the camera so the tracer never clips the near plane */
+	UPROPERTY(EditAnywhere, Category="Rifle")
+	float MuzzleSpawnForwardOffset = 40.f;
+
+	UPROPERTY(EditAnywhere, Category="Rifle|Anim")
+	UAnimSequence* RifleFireAnim;
+
+	UPROPERTY(EditAnywhere, Category="Rifle|Anim")
+	UAnimSequence* RifleReloadAnim;
+
+	UPROPERTY(EditAnywhere, Category="Rifle|Anim")
+	UAnimSequence* RifleDryFireAnim;
+
+	UPROPERTY(EditAnywhere, Category="Rifle|Audio")
+	USoundBase* RifleShotSound;
+
+	UPROPERTY(EditAnywhere, Category="Rifle|Audio")
+	USoundBase* RifleDryClickSound;
+
+	UPROPERTY(EditAnywhere, Category="Rifle|Audio")
+	USoundBase* RifleReloadSound;
+
 	/** Handheld-camera bob/breathing knobs (07_CAMERA.md); applied by UHeadbobShakePattern, started on possession */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Camera")
 	FHeadbobSettings HeadbobSettings;
@@ -175,6 +240,12 @@ protected:
 
 private:
 
+	void FinishReload();
+
+	void PlayFirstPersonAnim(UAnimSequence* Anim);
+
+	AMGBunkerManager* GetBunkerManager();
+
 	void StartEyeHeightBlend(const FVector& TargetRelativeLocation, float Duration);
 
 	void StartEyeDropToProne();
@@ -196,6 +267,20 @@ private:
 	FVector StandingFirstPersonMeshRelativeLocation = FVector::ZeroVector;
 
 	TSubclassOf<UAnimInstance> StandingBodyAnimClass;
+
+	int32 MagRounds = 0;
+
+	bool bAiming = false;
+
+	bool bReloading = false;
+
+	float LastShotTime = -100.f;
+
+	float DefaultFieldOfView = 90.f;
+
+	FTimerHandle ReloadTimer;
+
+	TWeakObjectPtr<AMGBunkerManager> CachedBunkerManager;
 
 	bool bDebugThirdPersonViewActive = false;
 
@@ -255,6 +340,9 @@ public:
 
 	/** True while prone momentum is still carrying the character along the ground */
 	bool IsSliding() const { return bSlideActive; }
+
+	/** True while aiming down sights; movement is locked and the view narrows */
+	bool IsAiming() const { return bAiming; }
 
 	/** True while the F6 debug orbit camera is active; headbob stays out of the debug view */
 	bool IsDebugThirdPersonActive() const { return bDebugThirdPersonViewActive; }

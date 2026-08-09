@@ -152,6 +152,10 @@ struct FMGSettings
 	UPROPERTY(EditAnywhere, Category = "MG|Crew")
 	float SoloStopMultiplier = 3.f;
 
+	/** Segment-test radius around a rendered crewman for rifle hits through the slit */
+	UPROPERTY(EditAnywhere, Category = "MG|Crew")
+	float CrewHitRadius = 35.f;
+
 	UPROPERTY(EditAnywhere, Category = "MG|Crew")
 	float TakeoverDurationMin = 3.f;
 
@@ -215,6 +219,22 @@ struct FMGSettings
 	UPROPERTY(EditAnywhere, Category = "MG|Priority")
 	float SharedTargetScorePenalty = 0.5f;
 
+	/** Whole-score multiplier when the target is the player — being hunted must be routine, not a 4-17% event. UNTUNED */
+	UPROPERTY(EditAnywhere, Category = "MG|Priority")
+	float PlayerTargetScoreMultiplier = 3.f;
+
+	/** Player rounds landing within this range of a gun's slit mark the player as firing at it (ladder rung 1) */
+	UPROPERTY(EditAnywhere, Category = "MG|Priority")
+	float FiredUponAlertRadius = 600.f;
+
+	/** Rung-1 bonus decays to zero over this window after the player's last round landed near the gun */
+	UPROPERTY(EditAnywhere, Category = "MG|Priority")
+	float FiredUponWindowSeconds = 6.f;
+
+	/** Score added at full strength when fire lands near the gun — sized to outrank the broke-cover bonus (500) */
+	UPROPERTY(EditAnywhere, Category = "MG|Priority")
+	float FiredUponScoreBonus = 800.f;
+
 	/** Bullet passing within this range of the player's head snaps a supersonic crack — the almost-hit band */
 	UPROPERTY(EditAnywhere, Category = "MG|Audio")
 	float CrackRadius = 300.f;
@@ -256,6 +276,14 @@ struct FMGSettings
 	float SpeedOfSound = 34300.f;
 };
 
+UENUM()
+enum class EMGBulletSource : uint8
+{
+	Gun,
+	PlayerRifle,
+	InfantryRifle,
+};
+
 USTRUCT()
 struct FMGBullet
 {
@@ -267,7 +295,10 @@ struct FMGBullet
 
 	float RemainingLife = 0.f;
 
-	int32 SourceBunkerIndex = 0;
+	EMGBulletSource Source = EMGBulletSource::Gun;
+
+	/** Bunker index for Gun, soldier index for InfantryRifle, unused for PlayerRifle */
+	int32 SourceIndex = 0;
 
 	bool bCrackPlayed = false;
 };
@@ -303,6 +334,9 @@ struct FMGBunkerState
 	float RotationSpeedJitter = 1.f;
 
 	float LeadFraction = 1.f;
+
+	/** Last time the player's fire landed near this gun or hit its crew (priority ladder rung 1) */
+	float LastFiredUponTime = -1000.f;
 
 	float ScanPhase = 0.f;
 
@@ -393,6 +427,10 @@ public:
 
 	virtual void Tick(float DeltaSeconds) override;
 
+	/** Rifle rounds (player and infantry) ride the same bullet array as MG fire */
+	void SpawnBullet(EMGBulletSource Source, int32 SourceIndex, const FVector& Position, const FVector& Velocity,
+		int32 TargetId = NoTargetId);
+
 	void ToggleNoDamage();
 
 	void KillGunCrewMember();
@@ -439,7 +477,11 @@ private:
 
 	void UpdateBullets(float DeltaSeconds);
 
-	void HandlePlayerHit(int32 SourceBunkerIndex, const FVector& HitPoint);
+	void HandlePlayerHit(int32 ShooterId, const FVector& HitPoint);
+
+	void KillCrewMemberOnBunker(int32 BunkerIndex);
+
+	void MarkFiredUponNear(const FVector& ImpactPoint, float Now);
 
 	void SyncFiringAudio(FMGBunkerState& State, bool bActuallyFiring);
 
@@ -463,6 +505,10 @@ private:
 
 	void DrawDebugState() const;
 
+	/** Crack voice for bullets with no bunker to borrow one from (infantry rifles) */
+	UPROPERTY(Transient)
+	USoundBase* FallbackCrackSound = nullptr;
+
 	UPROPERTY(Transient)
 	USoundAttenuation* ImpactAttenuation = nullptr;
 
@@ -481,6 +527,8 @@ private:
 	FPlaytestRecorder Recorder;
 
 	TWeakObjectPtr<AAllySimManager> AllySim;
+
+	TWeakObjectPtr<class AInfantryManager> Infantry;
 
 	mutable TWeakObjectPtr<ABreakingWaveCharacter> CachedPlayer;
 

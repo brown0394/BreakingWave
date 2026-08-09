@@ -143,17 +143,17 @@ This is where you'll know "does this game work."
   - [ ] Corpse cover — physics-based penetration
   - [ ] Corpse count cap management
 - [ ] Expand to 3 MGs + verify independent behavior
-- [ ] Enemy infantry AI (Zone 3)
-  - [ ] Behavior cycle (cover → rise → fire → cover)
-  - [ ] Position movement (fire concentration, comrade death, enemy approach triggers)
-- [ ] Ammo system
-  - [ ] Reload mechanic
-  - [ ] Empty magazine feedback
+- [~] Enemy infantry AI (Zone 3) — pulled forward 2026-08-09 (Decisions 035–036)
+  - [x] Behavior cycle (cover → rise → fire → cover) + flinch layer
+  - [ ] Position movement (fire concentration, comrade death, enemy approach triggers) — deferred, see 02_STATUS.md
+- [~] Ammo system
+  - [x] Reload mechanic (2026-08-09, infinite reserves for now)
+  - [x] Empty magazine feedback (dry click)
   - [ ] Looting when out of ammo (low probability spawn, auto-collect)
-- [ ] Firing system
-  - [ ] Hip fire
-  - [ ] Aimed fire
-  - [ ] FOV reduction when aiming, sway increase while wounded
+- [~] Firing system — shared rifle system 2026-08-09 (Decision 035)
+  - [x] Hip fire
+  - [x] Aimed fire (FOV narrows, movement locked)
+  - [ ] Sway increase while wounded (waits for Step 4's wounded state)
 
 **Relevant docs**: 08_ENEMY_AI.md, 09_ALLY_NPC.md, 06_COMBAT.md
 

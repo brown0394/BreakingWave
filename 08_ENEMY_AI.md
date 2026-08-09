@@ -172,6 +172,12 @@ Repeat
 
 ### Position Movement
 
+> STATUS 2026-08-09: the first infantry pass (Decision 036) ships the fire cycle + a
+> flinch layer (near impacts / comrade death → early drop, longer wait) but NOT this
+> section — relocation is deliberately deferred and stays on the build list
+> (02_STATUS.md deferred section). Until then a ducked soldier re-emerges in the same
+> spot; that known exploit is the trigger for building this.
+
 Infantry don't stay in one spot. They relocate periodically.
 
 **Movement range:**

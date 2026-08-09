@@ -143,6 +143,37 @@ void FPlaytestRecorder::LogShot(int32 GunIndex, const FVector& FirePos, int32 Ta
 	AppendEvent(TEXT("shot"), FirePos, GunIndex, FString::Printf(TEXT("tgt=%d"), TargetId));
 }
 
+void FPlaytestRecorder::LogPlayerShot(const FVector& FirePos)
+{
+	if (bRunActive)
+	{
+		++Run.PlayerShotsFired;
+	}
+	AppendEvent(TEXT("pshot"), FirePos, Playtest::PlayerTargetId, FString());
+}
+
+void FPlaytestRecorder::LogInfantryShot(int32 SoldierIndex, const FVector& FirePos, int32 TargetId)
+{
+	if (bRunActive)
+	{
+		++Run.ShotsTotal;
+		if (TargetId == Playtest::PlayerTargetId)
+		{
+			++Run.ShotsAtPlayer;
+		}
+	}
+	AppendEvent(TEXT("inf_shot"), FirePos, 1000 + SoldierIndex, FString::Printf(TEXT("tgt=%d"), TargetId));
+}
+
+void FPlaytestRecorder::LogInfantryDown(int32 SoldierIndex, const FVector& HitPoint)
+{
+	if (bRunActive)
+	{
+		++Run.InfantryDowned;
+	}
+	AppendEvent(TEXT("inf_down"), HitPoint, 1000 + SoldierIndex, FString());
+}
+
 void FPlaytestRecorder::LogImpact(int32 GunIndex, const FVector& HitPoint)
 {
 	AppendEvent(TEXT("impact"), HitPoint, GunIndex, FString());
@@ -272,9 +303,9 @@ void FPlaytestRecorder::AppendSettingsDump(const TCHAR* Prefix, const UScriptStr
 
 FString FPlaytestRecorder::RunSummaryExtra() const
 {
-	return FString::Printf(TEXT("dur=%.1f;maxy=%.0f;shots_at=%d;hits=%d;cracks=%d;whizzes=%d;adv_targeted=%.0f;adv_clear=%.0f;nodmg=%d"),
+	return FString::Printf(TEXT("dur=%.1f;maxy=%.0f;shots_at=%d;hits=%d;cracks=%d;whizzes=%d;adv_targeted=%.0f;adv_clear=%.0f;nodmg=%d;pshots=%d;inf_down=%d"),
 		Now() - Run.StartTime, Run.MaxY, Run.ShotsAtPlayer, Run.PlayerHits, Run.CracksHeard, Run.WhizzesHeard,
-		Run.AdvanceWhileTargetedCm, Run.AdvanceWhileClearCm, Run.bNoDamageUsed ? 1 : 0);
+		Run.AdvanceWhileTargetedCm, Run.AdvanceWhileClearCm, Run.bNoDamageUsed ? 1 : 0, Run.PlayerShotsFired, Run.InfantryDowned);
 }
 
 void FPlaytestRecorder::PrintRunSummary(const FVector& DeathPos) const
@@ -290,9 +321,9 @@ void FPlaytestRecorder::PrintRunSummary(const FVector& DeathPos) const
 	}
 	const float HitPercent = Run.ShotsAtPlayer > 0 ? 100.f * Run.PlayerHits / Run.ShotsAtPlayer : 0.f;
 	const FString Text = FString::Printf(
-		TEXT("RUN %d  %.1fs  died Zone %d  advanced %.0fm\nshots at you %d  hits %d (%.1f%%)  cracks %d  whizzes %d\nadvance while targeted %.0fm | while clear %.0fm\nsplits: %s%s"),
+		TEXT("RUN %d  %.1fs  died Zone %d  advanced %.0fm\nshots at you %d  hits %d (%.1f%%)  cracks %d  whizzes %d  you fired %d  infantry downed %d\nadvance while targeted %.0fm | while clear %.0fm\nsplits: %s%s"),
 		Run.RunIndex, Duration, DeathZone, (Run.MaxY - Run.StartY) / 100.f,
-		Run.ShotsAtPlayer, Run.PlayerHits, HitPercent, Run.CracksHeard, Run.WhizzesHeard,
+		Run.ShotsAtPlayer, Run.PlayerHits, HitPercent, Run.CracksHeard, Run.WhizzesHeard, Run.PlayerShotsFired, Run.InfantryDowned,
 		Run.AdvanceWhileTargetedCm / 100.f, Run.AdvanceWhileClearCm / 100.f,
 		*Splits, Run.bNoDamageUsed ? TEXT("\n(no-damage used this run)") : TEXT(""));
 	UE_LOG(LogTemp, Log, TEXT("Playtest %s"), *Text);
