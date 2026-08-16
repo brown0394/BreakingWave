@@ -3,7 +3,13 @@
 Run with plain system Python (no editor needed):
     python Tools/AnalyzePlaytests.py [path-to-Playtests-dir]
 
-Prints per-run and aggregate stats; renders heatmap PNGs if matplotlib is installed.
+Prints per-life and aggregate stats, the session advance envelope, and the takeover
+give-back; renders heatmap PNGs if matplotlib is installed.
+
+The unit is a LIFE, not an attempt: since the death-transition pass a death hands the
+player a nearby living ally instead of resetting to the craft, so a session is one
+continuous push made of many lives. Sessions recorded before that pass used run_start /
+run_abort and are still read here — for those, every life simply began at the craft.
 """
 
 import glob
@@ -81,9 +87,13 @@ def parse_session(path):
     return settings, runs
 
 
+LIFE_START_EVENTS = ("life_start", "run_start")
+LIFE_END_EVENTS = ("death", "life_abort", "run_abort")
+
+
 def summarize_run(session, run_index, events):
-    start = next((e for e in events if e["event"] == "run_start"), None)
-    end = next((e for e in events if e["event"] in ("death", "run_abort")), None)
+    start = next((e for e in events if e["event"] in LIFE_START_EVENTS), None)
+    end = next((e for e in events if e["event"] in LIFE_END_EVENTS), None)
     if start is None:
         return None
 
@@ -119,6 +129,8 @@ def summarize_run(session, run_index, events):
         run["nodmg"] = x["nodmg"] == "1"
         run["pshots"] = int(x.get("pshots", "0"))
         run["inf_down"] = int(x.get("inf_down", "0"))
+        run["wounds"] = int(x.get("wounds", "0"))
+        run["headshot"] = x.get("head", "0") == "1"
     else:
         run["duration"] = active[-1]["t"] - start["t"] if active else 0.0
         run["max_y"] = max((e["y"] for e in run["samples"]), default=start["y"])
@@ -138,32 +150,84 @@ def summarize_run(session, run_index, events):
         run["nodmg"] = any(
             e["event"] == "nodamage" and e["extra"].get("enabled") == "1" for e in active
         ) or any(e["event"] == "hit_player" and e["extra"].get("nodmg") == "1" for e in active)
+        run["wounds"] = sum(
+            1 for e in active if e["event"] == "hit_player" and e["extra"].get("nodmg") != "1")
+        run["headshot"] = any(
+            e["event"] == "hit_player" and e["extra"].get("head") == "1" for e in active)
 
     run["advance_m"] = (run["max_y"] - run["start_y"]) / 100.0
+    run["start_zone"] = zone_at_y(run["start_y"])
     run["end_zone"] = zone_at_y(run["max_y"])
+    run["takeover"] = next(
+        ({"given_back_m": float(e["extra"].get("given_back", "0")) / 100.0,
+          "ladder": int(e["extra"].get("ladder", "0")),
+          "to": (e["x"], e["y"]),
+          "from_y": float(e["extra"].get("death_y", "0"))}
+         for e in events if e["event"] == "takeover"), None)
     return run
 
 
 def print_runs(all_runs):
-    header = f"{'session':<18}{'run':>4}{'status':>9}{'dur s':>8}{'zone':>6}{'adv m':>8}{'shots@':>8}{'hits':>6}{'hit %':>7}{'cracks':>8}{'whizz':>7}{'fired':>7}{'infdn':>7}{'adv tgt':>9}{'adv clr':>9}  splits"
+    header = (f"{'session':<18}{'life':>5}{'status':>9}{'dur s':>8}{'from':>6}{'zone':>6}{'ground m':>10}"
+              f"{'shots@':>8}{'hits':>6}{'hit %':>7}{'wnd':>5}{'hs':>4}{'cracks':>8}{'whizz':>7}{'fired':>7}"
+              f"{'infdn':>7}{'adv tgt':>9}{'adv clr':>9}{'back m':>8}{'ladr':>6}  splits")
     print(header)
     print("-" * len(header))
     for r in all_runs:
         hit_pct = 100.0 * r["hits"] / r["shots_at"] if r["shots_at"] else 0.0
         splits = "  ".join(f"Z{z} {s:.1f}" for z, s in sorted(r["splits"].items()))
         tag = " [nodmg]" if r["nodmg"] else ""
+        takeover = r.get("takeover")
+        back = f"{takeover['given_back_m']:>8.0f}" if takeover else f"{'-':>8}"
+        ladder = f"{takeover['ladder']:>6}" if takeover else f"{'-':>6}"
         print(
-            f"{r['session']:<18}{r['run']:>4}{r['status']:>9}{r['duration']:>8.1f}{r['end_zone']:>6}"
-            f"{r['advance_m']:>8.0f}{r['shots_at']:>8}{r['hits']:>6}{hit_pct:>7.1f}{r['cracks']:>8}{r['whizzes']:>7}"
+            f"{r['session']:<18}{r['run']:>5}{r['status']:>9}{r['duration']:>8.1f}"
+            f"{r['start_zone']:>6}{r['end_zone']:>6}{r['advance_m']:>10.0f}"
+            f"{r['shots_at']:>8}{r['hits']:>6}{hit_pct:>7.1f}{r.get('wounds', 0):>5}"
+            f"{('y' if r.get('headshot') else ''):>4}{r['cracks']:>8}{r['whizzes']:>7}"
             f"{r['pshots']:>7}{r['inf_down']:>7}"
-            f"{r['adv_targeted_m']:>9.0f}{r['adv_clear_m']:>9.0f}  {splits}{tag}"
+            f"{r['adv_targeted_m']:>9.0f}{r['adv_clear_m']:>9.0f}{back}{ladder}  {splits}{tag}"
         )
+
+
+def print_session_envelope(all_runs):
+    """Does the loop ratchet forward? Ground won per life against ground given back on takeover."""
+    by_session = defaultdict(list)
+    for r in all_runs:
+        by_session[r["session"]].append(r)
+
+    print("\nSESSION ADVANCE ENVELOPE")
+    header = (f"{'session':<18}{'lives':>7}{'takeovers':>11}{'first y':>9}{'best y':>9}"
+              f"{'net m':>8}{'back m':>8}{'ladder avg':>12}{'ladder max':>12}")
+    print(header)
+    print("-" * len(header))
+    for session, runs in sorted(by_session.items()):
+        takeovers = [r["takeover"] for r in runs if r.get("takeover")]
+        first_y = min(r["start_y"] for r in runs)
+        best_y = max(r["max_y"] for r in runs)
+        back = sum(t["given_back_m"] for t in takeovers)
+        ladders = [t["ladder"] for t in takeovers]
+        ladder_avg = f"{statistics.mean(ladders):>12.2f}" if ladders else f"{'-':>12}"
+        ladder_max = f"{max(ladders):>12}" if ladders else f"{'-':>12}"
+        print(f"{session:<18}{len(runs):>7}{len(takeovers):>11}{first_y:>9.0f}{best_y:>9.0f}"
+              f"{(best_y - first_y) / 100.0:>8.0f}{back:>8.0f}{ladder_avg}{ladder_max}")
+
+    all_takeovers = [r["takeover"] for r in all_runs if r.get("takeover")]
+    if all_takeovers:
+        expanded = [t for t in all_takeovers if t["ladder"] > 0]
+        print(f"\nthe ±20 m slab held someone on {len(all_takeovers) - len(expanded)} of {len(all_takeovers)} takeovers; "
+              f"the ladder had to expand on {len(expanded)}")
+        print(f"give-back per takeover: median {statistics.median(t['given_back_m'] for t in all_takeovers):.0f}m  "
+              f"max {max(t['given_back_m'] for t in all_takeovers):.0f}m")
 
 
 def print_aggregates(all_runs):
     clean = [r for r in all_runs if not r["nodmg"]]
     deaths = [r for r in clean if r["status"] == "death"]
-    print(f"\nAGGREGATES — {len(all_runs)} runs, {len(clean)} clean, {len(deaths)} ended in a death")
+    print(f"\nAGGREGATES — {len(all_runs)} lives, {len(clean)} clean, {len(deaths)} ended in a death")
+    headshots = sum(1 for r in deaths if r.get("headshot"))
+    if deaths and headshots:
+        print(f"deaths by headshot: {headshots} of {len(deaths)} ({100.0 * headshots / len(deaths):.0f}%)")
     if deaths:
         durations = [r["duration"] for r in deaths]
         print(f"survival: median {statistics.median(durations):.1f}s  min {min(durations):.1f}s  max {max(durations):.1f}s")
@@ -186,7 +250,7 @@ def print_aggregates(all_runs):
     for zone in range(1, len(ZONE_NAMES)):
         splits = [r["splits"][zone] for r in clean if zone in r["splits"]]
         if splits:
-            print(f"reach {ZONE_NAMES[zone]}: median {statistics.median(splits):.1f}s over {len(splits)} runs")
+            print(f"reach {ZONE_NAMES[zone]}: median {statistics.median(splits):.1f}s over {len(splits)} lives")
 
 
 def print_setting_diffs(session_settings):
@@ -220,7 +284,7 @@ def render_maps(all_runs, sessions_events, out_path):
 
     ax = axes[0]
     draw_zone_lines(ax)
-    ax.set_title("player paths, hits (o), deaths (x)")
+    ax.set_title("player paths, hits (o), deaths (x), takeover handoff (arrow)")
     for r in all_runs:
         xs = [e["x"] for e in r["samples"]]
         ys = [e["y"] for e in r["samples"]]
@@ -231,6 +295,11 @@ def render_maps(all_runs, sessions_events, out_path):
     deaths = [r["death_pos"] for r in all_runs if r["death_pos"]]
     if deaths:
         ax.scatter(*zip(*deaths), s=40, marker="x", color="red")
+    for r in all_runs:
+        takeover = r.get("takeover")
+        if takeover and r["death_pos"]:
+            ax.annotate("", xy=takeover["to"], xytext=r["death_pos"],
+                        arrowprops=dict(arrowstyle="->", color="deepskyblue", alpha=0.7, linewidth=0.8))
 
     ax = axes[1]
     draw_zone_lines(ax)
@@ -295,10 +364,11 @@ def main():
             sessions_events.append(runs[run_index])
 
     if not all_runs:
-        print("sessions found but no runs recorded")
+        print("sessions found but no lives recorded")
         return
 
     print_runs(all_runs)
+    print_session_envelope(all_runs)
     print_aggregates(all_runs)
     print_setting_diffs(session_settings)
 

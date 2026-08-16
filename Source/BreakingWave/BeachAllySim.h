@@ -83,9 +83,17 @@ struct FAllySimSettings
 	UPROPERTY(EditAnywhere, Category = "AllySim")
 	float PronePauseMax = 4.f;
 
-	/** World Y past which a simulated soldier despawns (short of the Zone 3 infantry fight, which is a later system) */
+	/** World Y past which a simulated soldier despawns — the top of Zone 4, so takeover candidates exist at every depth the player can reach */
 	UPROPERTY(EditAnywhere, Category = "AllySim")
-	float DespawnY = 5000.f;
+	float DespawnY = 15600.f;
+
+	/** Takeover slab reaches this far forward of the death point and never further (Decision 038: death must not gift ground) */
+	UPROPERTY(EditAnywhere, Category = "AllySim|Takeover")
+	float TakeoverForwardReach = 2000.f;
+
+	/** Rear edge of the slab starts here and steps back by this much until a live ally is found */
+	UPROPERTY(EditAnywhere, Category = "AllySim|Takeover")
+	float TakeoverRearStep = 2000.f;
 
 	UPROPERTY(EditAnywhere, Category = "AllySim")
 	float StandingHeight = 180.f;
@@ -116,6 +124,13 @@ public:
 	void GetAimPoints(const FSimAlly& Ally, FVector OutPoints[3]) const;
 
 	void KillAlly(int32 Index);
+
+	/** Decision 038: random live ally within [AnchorY - rear, AnchorY + TakeoverForwardReach], rear edge
+	    stepping back until the slab holds someone. Returns INDEX_NONE only when nobody is alive at all. */
+	int32 SelectTakeoverSlot(float AnchorY, int32& OutLadderSteps) const;
+
+	/** Live allies inside one un-expanded slab centred on AnchorY — the telemetry measure of how often the ladder will have to expand */
+	int32 CountAlliesInSlab(float AnchorY) const;
 
 	void SetDebugDraw(bool bEnabled) { bDebugDraw = bEnabled; }
 

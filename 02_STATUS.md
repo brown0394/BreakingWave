@@ -1,17 +1,21 @@
 # Current Status
 
-> Last updated: 2026-08-09
+> Last updated: 2026-08-16
 >
 > This document holds the CURRENT state and what's next — nothing else. Session history
 > lives in git log; the why of past choices lives in 03_DECISIONS.md; engine gotchas live
 > in 11_ENGINE_NOTES.md. When updating, replace stale facts instead of appending below them.
 
-## Phase: Step 3+ — MG live; shared rifle system + Z3 infantry BUILT 2026-08-09 (pulled forward from Step 6, Decisions 035–037; in-editor placement + feel-check pending)
+## Phase: Steps 4+5 mechanical loop BUILT and compiled 2026-08-16 — NOT YET PLAY-TESTED. The whole spec is now settled (Decisions 038 complete, 039, 040)
 
-Spec was /grill-me'd question-by-question 2026-07-19 → Decisions 027–031. Step 3 scaffolding
-choices (not durable decisions): any MG hit = bare respawn at the landing craft (Step 4
-replaces this — remember the MG reads ~2× more lethal than the final two-shot model),
-`MGNoDamage` exec for observation, silence itself signals stops (per-type stop sounds wait
+The death → takeover loop exists: two-shot damage on mesh-resolved hits, death camera,
+fade, ally selection, new pawn, targeting delay, corpses, restructured telemetry.
+Compiles clean. **Nothing in it has been seen running yet** — the next session is a PIE
+feel-check, and it is also the first session in which the rifle and the Z3 infantry
+firefight become reachable at all.
+
+The bare-respawn scaffolding is GONE (`PlayerSpawnTransform` deleted). `MGNoDamage`
+remains for observation; silence itself still signals MG stops (per-type stop sounds wait
 for the sound pass).
 
 All grey-box geometry is placed. Fog and the zone-size walkthrough are DEFERRED until after
@@ -190,7 +194,48 @@ more system work (user decision 2026-07-04) — pick them up before tuning zone 
   RifleDryClick/RifleReload synthesized + imported via Tools/GenerateRifleAudio.py
   (headless OK, disk-verified); character and infantry manager BeginPlay-fallback-load
   them, no BP wiring needed
-- [x] Playtest telemetry (PlaytestRecorder.h/.cpp, built 2026-08-02): FPlaytestRecorder
+- [x] **Death → takeover loop (Decisions 038–040, built 2026-08-16, NOT play-tested).**
+  Lives on `ABreakingWavePlayerController` as a phase machine ticked in `PlayerTick`:
+  DeathShake (0.3 s) → DeathDescend (1.2 s) → DeathHold (0.5 s) → FadeOut (0.5 s) →
+  [narrative screen, currently zero duration] → takeover → FadeIn (1.25 s) → control.
+  Knobs in `FTransitionSettings`. ALL NUMBERS TENTATIVE.
+  - Death camera is a spawned `ACameraActor` driven by scripted math, never the ragdoll:
+    decaying rattle during the shake phase, ease-out descent to `GroundClearance` (18 cm)
+    above a downward-traced floor, roll to `TiltDegrees` (22°) on the side the round was
+    travelling. Fade uses `StartCameraFade` with `bFadeAudio` — the audio fade the spec
+    wanted, for one bool, no submix work
+  - Selection: `AAllySimManager::SelectTakeoverSlot` — forward edge pinned at
+    anchor + `TakeoverForwardReach` (2000 uu), rear edge stepping back by
+    `TakeoverRearStep` until the slab holds someone, random among them, ladder-step count
+    returned for telemetry. Runs at the END of the fade, so the man is alive when taken.
+    Returns INDEX_NONE only if nobody is alive anywhere; the machine then holds on black
+    and re-searches each tick (never a bare respawn)
+  - A NEW PAWN is spawned and possessed per life. The old one becomes a ragdoll corpse
+    (`BecomeCorpse`), capped by `MaxCorpses` (8, EditAnywhere), oldest retired first;
+    ragdoll ignores ECC_Pawn so corpses can't wall you in
+  - Takeover state: control rotation from the ally's `HeadingYaw`, `Crouch()` if he was
+    prone, forced forward input through the fade if he was advancing, magazine
+    `RandRange(TakeoverMagRoundsMin 3, MagazineSize)`. Input is locked for the whole
+    fade-in. **Simplification on the record**: the ally's exact `Speed` (300–550) is NOT
+    inherited — you advance at `WalkSpeed`. Nobody can see an unrendered ally, so there is
+    no continuity to break; revisit only if the mid-stride handover reads wrong
+  - Targeting delay clocked from pawn spawn, `FadeInSeconds + TargetingDelaySeconds`
+    (~2.75 s total, ~1.5 s of it after control). MGs: awareness zeroed and accrual blocked
+    (`CanAcquirePlayer`), so they forget the spot and must re-acquire through the normal
+    perception ramp. Infantry: flat exclusion via `IsTargetAlive`. Bullets in flight stay live
+- [x] **Two-shot damage + mesh-authoritative hits (Decision 039, built 2026-08-16, NOT
+  play-tested)**: head bone = instant death, everything else wounds, second wound kills
+  (`WoundsToKill`). `ABreakingWaveCharacter::TraceBody` does a mesh-bounds broadphase then
+  `LineTraceComponent` against the physics asset; `HeadBones` (default `head`) classifies.
+  The capsule is no longer a combat volume — **prone is now a real 180 cm body on the
+  ground and genuinely more exposed to the flanking guns than it has ever been**. The mesh
+  is forced to `AlwaysTickPoseAndRefreshBones` and gets `PA_Mannequin` if it has no physics
+  asset; if it still has no bodies, `bBodyTraceUnavailable` falls back to the old capsule
+  test and logs an Error — the failure mode is a warning, never a silently immortal player.
+  Tell is the hit moment only: `UHitCameraShake` (directional push + decaying rattle,
+  knobs in `FHitShakeSettings`) plus `/Game/Audio/PlayerPain`. Vignette, blur, aim sway,
+  speed drop and wounded headbob deliberately deferred
+- [x] Playtest telemetry (PlaytestRecorder.h/.cpp, built 2026-08-02; restructured 2026-08-16): FPlaytestRecorder
   lives inside AMGBunkerManager and auto-records every PIE session to
   Saved/Playtests/session_<stamp>.csv — settings snapshot (FMGSettings + FAllySimSettings
   dumped via reflection, so tuning changes stay attributable per session), 2 Hz player
@@ -200,8 +245,20 @@ more system work (user decision 2026-07-04) — pick them up before tuning zone 
   AnalyzePlaytests.py; update both if zones move). On death: on-screen + log run summary
   (survival time, deepest zone, shots-at-you/hits/cracks, advance while targeted vs clear,
   zone splits). MGNoDamage taints the run so the analyzer excludes it from combat stats.
-  Flushes every 5 s and on death/EndPlay; hit=respawn scaffolding means "death" = first
-  hit for now
+  Flushes every 5 s and on death/EndPlay.
+  RESTRUCTURED 2026-08-16 — the unit is now a LIFE, with a session track on top, because
+  death chains into a takeover instead of resetting to the craft:
+  - CSV column and events renamed `run`→`life` (`life_start` / `life_abort`); life summary
+    gained `starty`, `ground`, `wounds`, `head`
+  - New `takeover` event: death Y, chosen ally X/Y, and **ladder steps** — the direct
+    measure of whether Decision 038's ±20 m slab is thick enough at depth
+  - New `session_end` event: lives, takeovers, first/best Y, net advance, total give-back,
+    mean/max ladder — the ratchet question in one row
+  - 2 Hz sample gained `wounds` and `slab_allies` (live allies inside the selection slab
+    around the player's current Y)
+  - `hit_player` gained `bone` and `head`
+  - `FInfantrySettings` now in the settings snapshot, so infantry tuning is attributable
+  - All three 2026-08-11 known gaps are closed by the above
 
 ### Tools
 - [x] Tools/GenerateBeachHeightmap.ps1 — generates the zone-profiled heightmap
@@ -250,13 +307,20 @@ more system work (user decision 2026-07-04) — pick them up before tuning zone 
   IMC_Default, sets the BP action slots; idempotent, headless OK (already run, disk-verified)
 - [x] Tools/GenerateRifleAudio.py — synthesizes + imports the 5 rifle placeholder sounds;
   idempotent, headless OK (already run, disk-verified)
+- [ ] Tools/GeneratePlayerPainAudio.py — synthesizes + imports the pain grunt
+  (/Game/Audio/PlayerPain); idempotent, headless OK. **NOT YET RUN** — run it before the
+  first feel-check or the only wounded feedback in the build is silent
 - [x] Tools/RetargetInfantryAnims.py — retargets the 5 ASP infantry-cycle anims reusing the
   prone pass's rigs/retargeter; needs `-ExecutePythonScript` full-editor mode (already run;
   BakeIKBonesFromFK.py re-run after, all 24 Retarget anims baked, disk-verified)
-- [ ] Tools/PlaceInfantryPositions.py — WRITTEN, NOT YET RUN (editor-only, spawning crashes
-  headless): places 2 seam-lane foxholes + center trench parapets, 7 AInfantrySoldier
-  shells, 1 AInfantryManager; idempotent (InfantrySystem tag); edit tables + re-run to move
-  positions
+- [x] Tools/PlaceInfantryPositions.py — RUN IN-EDITOR 2026-08-11 (editor-only, spawning
+  crashes headless): places 2 seam-lane foxholes + center trench parapets, 7
+  AInfantrySoldier shells, 1 AInfantryManager; idempotent (InfantrySystem tag); edit tables
+  + re-run to move positions. Confirmed live by telemetry — all 7 soldiers fired during the
+  2026-08-11 session. **LEVEL SAVE VERIFIED 2026-08-16** from the one-file-per-actor files
+  on disk (`Content/__ExternalActors__/FirstPerson/Lvl_FirstPerson/`, written 2026-08-11
+  22:15): 7 InfantrySoldier + 1 InfantryManager + 12 parapet pieces, all committed. The
+  actors survive an editor restart; no re-run needed
 - [x] Tools/AnalyzePlaytests.py (+ AnalyzePlaytests.bat) — offline analyzer for
   Saved/Playtests: per-run table, aggregates (median survival, zone-split medians, hit
   rate, advance-while-targeted vs clear), settings diffs between sessions, and
@@ -277,35 +341,54 @@ more system work (user decision 2026-07-04) — pick them up before tuning zone 
 
 ## Next Steps
 
-- [ ] **RESUME HERE — place the infantry, then feel-check the rifle + Z3 firefight**:
-  1. In the editor (Lvl_FirstPerson open): run `Tools/PlaceInfantryPositions.py`
-     (Tools > Execute Python Script), then SAVE THE LEVEL. Idempotent — edit its tables
-     and re-run to move positions
-  2. Hit Play — rifle first: LMB hip fire, RMB aim (view narrows, movement locks),
-     R reload, empty mag dry-clicks. Shoot at a bunker slit: that gun should turn on
-     you within a beat (rung 1). Kill crew through the slit → takeover silence windows.
-     KNOWN UNCERTAINTY: FP arm animations may not play if the template FP ABP lacks a
-     "DefaultSlot" montage slot — rifle still fires/sounds; report what you see
-  3. Then Z3: bolt rifles crack past you with a "phewww" band, each report followed by
-     the bolt-cycle clack (his window — move on it). Suppress a foxhole with hip fire:
-     the soldier should duck early and stay down longer (flinch). One hit downs a
-     soldier; he ragdolls and stays. The seam lanes should now be owned by the foxholes
-  4. After the runs: `Tools\AnalyzePlaytests.bat` — new `fired`/`infdn` columns, player
-     rifle aggregate line, infantry markers (orange v) on the fire map, player fire
-     excluded from the enemy-fire heatmap
-  5. **Then, in one batch**: tune PlayerTargetScoreMultiplier (MG) +
-     FInfantrySettings.PlayerTargetScoreMultiplier + infantry knobs together — both
-     coded, both untuned (Decision 035). Step 3 checklist questions (hit frequency,
-     crater survival, stop windows) stay open until being targeted is routine
-  6. Debug aids: **F7** = MG + ally + infantry readout; `MGNoDamage` observe mode
-     (taints the run), `MGKillCrew` = takeover windows
-  Greybox caveats: tracers converge on invisible sim allies (fog + rendered allies fix
-  that later); any hit = instant respawn scaffolding, so ALL enemy fire reads ~2× more
-  lethal than the final two-shot model; infantry can only be killed by the player's
-  rifle (nothing else shoots at them yet); soldiers re-emerge in the same spot until
-  the relocation layer is built — pre-aiming a known spot wins, expected, don't tune
-  around it. Beach length judgment still deferred: re-judge after the priority tuning
-  batch + fog, not before
+- [x] ~~Pre-flight: verify the infantry level save~~ — DONE 2026-08-16, verified from the
+  external-actor files on disk. The 7 soldiers, the manager and the parapets are all there
+- [ ] **PRE-FLIGHT, before any PIE: run `Tools/GeneratePlayerPainAudio.py`** (headless OK, absolute -script path) —
+  the pain grunt is the ONLY wounded feedback this pass has, and the character
+  fallback-loads `/Game/Audio/PlayerPain`. Without it a survived hit is a silent no-op
+- [ ] **RESUME HERE — first PIE feel-check of the whole loop.** Nothing below has been
+  seen running. In order:
+  - **Does the loop close at all?** Die → camera falls → black → new eyes. Watch for the
+    two known failure modes: an infinite black screen (the takeover found nobody —
+    look for the `AllySimManager` Error in the log), and a player who cannot be hit
+    (look for the `no usable physics bodies` Error; the capsule fallback keeps you
+    mortal but kills headshots). Also worth an early sanity check: hits must register at
+    all — the mesh hit volume has never been exercised, so `hits` staying at 0 across a
+    session while `shots_at` climbs is the signal that the trace is finding nothing
+  - **Does two-shot read?** You should be able to tell a survived hit from a miss on the
+    shake and grunt alone. If not, the tell is too weak and the persistent presentation
+    stops being deferrable
+  - **Is ~3.5 s death-to-control the right leash** when it fires every 30–60 s? The hold
+    (0.5 s) is the cheapest half-second to give back
+  - **Does the mid-stride handover feel like waking up or like losing the controls?**
+    Same question for taking over a PRONE man — you start pinned and must stand to move
+  - **Prone is now genuinely exposed** (mesh hits, not the 80 cm capsule). Check whether
+    it still reads as worth doing at all
+  - **Then the rifle + Z3 infantry feel-check, finally reachable**: rung-1 fire-drawing,
+    bolt-clack window tell, flinch suppression, ragdoll, seam-lane ownership, the
+    same-spot re-emerge pre-aim exploit. FP arm montages on "DefaultSlot" are still
+    UNVERIFIED — if the arms don't animate, that's why; the rifle still works
+- [ ] **Then `AnalyzePlaytests.bat`** — first batch with the life/session split. The
+  numbers to read first: `ladder` per takeover (is the ±20 m slab thick enough at depth,
+  or is it walking back 60 m every time?), `back m` totals, and the session envelope's
+  net advance versus give-back. `slab_allies` in the 2 Hz samples says whether density,
+  not the rule, is the constraint
+- [ ] **Then, in one batch**: tune PlayerTargetScoreMultiplier (MG) +
+  FInfantrySettings.PlayerTargetScoreMultiplier + infantry knobs together — both coded,
+  both untuned (Decision 035). Step 3 checklist questions (hit frequency, crater
+  survival, stop windows) stay open until being targeted is routine
+- Debug aids: **F7** = MG + ally + infantry readout; `MGNoDamage` observe mode (taints
+  the life for combat stats), `MGKillCrew` = takeover windows
+- Greybox caveats: tracers converge on invisible sim allies (fog + rendered allies fix
+  that later); infantry can only be killed by the player's rifle (nothing else shoots at
+  them yet); soldiers re-emerge in the same spot until the relocation layer is built —
+  pre-aiming a known spot wins, expected, don't tune around it; sim allies now walk
+  through the greybox bunkers and on up the bluff to profile 660 m (unrendered, nothing
+  to see, but MG and infantry attention is spent behind the bunker line). Beach length
+  judgment still deferred: re-judge after the priority tuning batch + fog, not before
+- **Telemetry comparability broke again** at 2026-08-16: two-shot damage and mesh hit
+  volumes mean lethality, hit rate and prone exposure are all on new footing. Sessions
+  before this date are not comparable for anything combat-related
 
 ### Writing backlog
 - [ ] Second character ("the one who shook me") narrative writing
@@ -341,7 +424,74 @@ so world = profile-meters × 100 − 50400 on both axes. Profile coords below wi
 - Landing craft (Zone 0, ramp faces +Y inland): A-left 230/270 (−27400, −23400), B-center 510/270 (600, −23400), C-right 790/270 (28600, −23400)
 - Bunkers (Zone 4, slit faces −Y sea): MG-left 200/620 (−30400, 11600), MG-center 510/635 (600, 13100), MG-right 800/620 (29600, 11600)
 
-## What Was Done (last session — 2026-08-09, second sitting)
+## What Was Done (last session — 2026-08-16)
+
+Grilling resumed at Q5 and ran to Q12; the whole death→transition spec is now settled
+(**Decision 038 completed, plus Decisions 039 and 040**). Then the entire pass was built
+and compiled clean:
+
+- Ally sim: `DespawnY` 5000 → 15600 (the old line sat *between* the foxholes at profile
+  550 and the trench at 560 — allies were evaporating inside the enemy position);
+  `SelectTakeoverSlot` ladder + `CountAlliesInSlab`
+- Character: wound counter, mesh-authoritative `TraceBody`, `TakeBulletHit`,
+  `BecomeCorpse`, `ApplyTakeoverState`, transition input lock + forced advance
+- New `HitCameraShake.h/.cpp`; new `Tools/GeneratePlayerPainAudio.py` (NOT yet run)
+- PlayerController: the whole phase machine, death camera actor, corpse ring buffer
+- MG + infantry: takeover notification, awareness lockout / flat exclusion
+- **Bug fixed on the way**: both managers cached the player in a `TWeakObjectPtr` that
+  only re-resolved when it went *invalid*. With corpses now lingering in the world, every
+  gun and every soldier would have kept tracking and shooting a corpse forever. Both
+  now resolve the live player each call and treat a dead one as no target. The
+  `PlayerSpawnTransform` bare-respawn path is deleted
+- Telemetry restructured (life/session split, takeover event, ladder steps, bone names,
+  slab counts, FInfantrySettings snapshot); `AnalyzePlaytests.py` updated and verified to
+  still read all nine older sessions (takeover columns show `-`)
+
+Compiled clean via UnrealBuildTool. **None of it has been run in PIE.**
+
+## What Was Done (2026-08-11)
+
+Fourth telemetry batch analyzed (session_20260811_221225, 24 runs, first session with
+`PlayerTargetScoreMultiplier` 3.0 live, infantry placed). Three findings:
+
+- **The priority knob works, and it overshoots.** 1,269 rounds aimed at the player in one
+  session — more than all eight prior sessions combined (1,163). Advance while targeted
+  went 7% → **32%** (405 m targeted vs 880 m clear); the "too safe / 90% of ground gained
+  while clear" pattern from three straight batches is gone. Hit rate FELL to 1.8% (from
+  3.2%) — volume is doing the killing, not accuracy. Deaths moved down the beach: best run
+  of the night 24.4 s / Z2, against 82.4 s / Z4 and several 33–40 s / Z3 runs in the two
+  prior batches. Zone-1 split times are unchanged (~5 s), so movement is the same; only
+  where you die changed. **The knob is NOT tuned yet** — this is the untuned 3.0 default,
+  and Decision 035 still holds: tune it with the infantry knobs in one batch
+- **Runs 1–10 are a respawn death-spiral, an artifact, not difficulty.** Ten consecutive
+  deaths in 0.0–0.5 s, all at y = 273 m (the craft), targeted 100% from t=0. Runs 6 and 10
+  died at 0.01 s and 0.02 s with *zero* shots fired at the player during those runs — they
+  were killed by rounds already in flight from the previous life. Bare respawn returns the
+  player to the spot the guns are already laid on, with no targeting delay, and
+  `SharedTargetScorePenalty` 0.5 cannot split the battery against a 3.0× multiplier, so all
+  three guns converge: 27–30 rounds arrived inside half a second. This is what pivoted the
+  plan to Steps 4+5 (Decision 038) — the cure is specced in 07_CAMERA.md §4 and lives
+  inside the transition, so it should not be patched onto the scaffolding
+- **The infantry and rifle feel-checks DID NOT HAPPEN.** The system is alive — all 7
+  soldiers fired, 66 bolt shots, cycle works — but **every one of those shots was at a sim
+  ally** (no `tgt=-1` rows), zero infantry hits on the player, zero downed. Pure geometry:
+  soldiers sit at profile y 550–560 and `MaxEngagementRange` is 120 m, so they open up at
+  y ≈ 430–440 m, and the deepest the player reached all session was **437 m**, for a
+  moment. The rifle likewise: 6 rounds fired across 24 runs. So the bolt-clack window tell,
+  the flinch layer, the ragdoll, seam-lane ownership, the pre-aim exploit, and the FP-arms
+  "DefaultSlot" uncertainty are all still unknown
+
+Useful map facts measured the same night: the live-ally population is **bimodal** — 58 of
+105 ally deaths in 250–375 m (the craft) and 46 in 425–575 m (Z2–Z3), with a gap at
+375–425 m that is a gap in *deaths*, not presence (that band is where allies are safe).
+Laterally they stay in their craft's column — 44 deaths around x≈230, 35 around x≈510, 20
+around x≈790 — the columns barely mix. Both facts shaped Decision 038's selection rule.
+
+Design work: the death→transition spec was /grill-me'd, four questions settled before the
+session ended → **Decision 038**. Grilling PAUSED at Q5; the remaining questions are listed
+in Next Steps. No code was written this session.
+
+## What Was Done (2026-08-09, second sitting)
 
 - Whizz feel-checked PASSED (user: whizz and crack read as different). Batch analyzed:
   17 new runs, whizz counts sane (399 whizzes on an 82 s run — longest ever, died in Z4;

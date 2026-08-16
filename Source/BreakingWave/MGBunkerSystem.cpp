@@ -4,6 +4,7 @@
 
 #include "BeachAllySim.h"
 #include "BreakingWaveCharacter.h"
+#include "BreakingWavePlayerController.h"
 #include "Camera/CameraComponent.h"
 #include "Components/AudioComponent.h"
 #include "Components/CapsuleComponent.h"
@@ -173,7 +174,9 @@ void AMGBunkerManager::BeginPlay()
 	WhizzAttenuation->Attenuation.AttenuationShapeExtents = FVector(150.f, 0.f, 0.f);
 	WhizzAttenuation->Attenuation.FalloffDistance = Settings.WhizzRadius * 3.f;
 
-	Recorder.BeginSession(GetWorld(), Settings, AllySim.IsValid() ? &AllySim->GetSettings() : nullptr);
+	Recorder.BeginSession(GetWorld(), Settings,
+		AllySim.IsValid() ? &AllySim->GetSettings() : nullptr,
+		Infantry.IsValid() ? &Infantry->GetSettings() : nullptr);
 }
 
 void AMGBunkerManager::EndPlay(const EEndPlayReason::Type EndPlayReason)
@@ -184,25 +187,36 @@ void AMGBunkerManager::EndPlay(const EEndPlayReason::Type EndPlayReason)
 
 ABreakingWaveCharacter* AMGBunkerManager::GetPlayerCharacter() const
 {
-	if (!CachedPlayer.IsValid())
+	ABreakingWaveCharacter* Player = Cast<ABreakingWaveCharacter>(UGameplayStatics::GetPlayerCharacter(GetWorld(), 0));
+	return (Player != nullptr && !Player->IsDead()) ? Player : nullptr;
+}
+
+bool AMGBunkerManager::CanAcquirePlayer() const
+{
+	return GetWorld()->GetTimeSeconds() >= PlayerAcquireBlockedUntil;
+}
+
+void AMGBunkerManager::NotifyPlayerTakeover(float BlockedUntilTime, float DeathAnchorY,
+	const FVector& TakeoverPosition, int32 LadderSteps)
+{
+	PlayerAcquireBlockedUntil = BlockedUntilTime;
+
+	for (FMGBunkerState& State : Bunkers)
 	{
-		CachedPlayer = Cast<ABreakingWaveCharacter>(UGameplayStatics::GetPlayerCharacter(GetWorld(), 0));
+		FMGAwareness& PlayerAwareness = AwarenessFor(State, PlayerTargetId);
+		PlayerAwareness = FMGAwareness();
+		if (State.CurrentTargetId == PlayerTargetId)
+		{
+			State.CurrentTargetId = NoTargetId;
+		}
 	}
-	return CachedPlayer.Get();
+
+	Recorder.LogTakeover(DeathAnchorY, TakeoverPosition, LadderSteps);
 }
 
 void AMGBunkerManager::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
-
-	if (!bPlayerSpawnCaptured)
-	{
-		if (const ABreakingWaveCharacter* Player = GetPlayerCharacter())
-		{
-			PlayerSpawnTransform = Player->GetActorTransform();
-			bPlayerSpawnCaptured = true;
-		}
-	}
 
 	for (int32 i = 0; i < Bunkers.Num(); ++i)
 	{
@@ -228,7 +242,10 @@ void AMGBunkerManager::Tick(float DeltaSeconds)
 			bPlayerTargeted = true;
 		}
 	}
-	Recorder.SamplePlayer(GetPlayerCharacter(), bPlayerTargeted, StoppedGunCount, DeltaSeconds);
+	const ABreakingWaveCharacter* SampledPlayer = GetPlayerCharacter();
+	const int32 AlliesInSlab = (SampledPlayer != nullptr && AllySim.IsValid())
+		? AllySim->CountAlliesInSlab(SampledPlayer->GetActorLocation().Y) : 0;
+	Recorder.SamplePlayer(SampledPlayer, bPlayerTargeted, StoppedGunCount, AlliesInSlab, DeltaSeconds);
 
 	if (bDebug)
 	{
@@ -312,6 +329,12 @@ void AMGBunkerManager::EvaluatePerception(FMGBunkerState& State)
 
 		if (!IsTargetAlive(TargetId))
 		{
+			continue;
+		}
+
+		if (TargetId == PlayerTargetId && !CanAcquirePlayer())
+		{
+			AwarenessFor(State, TargetId).LastExposure = 0.f;
 			continue;
 		}
 
@@ -442,6 +465,10 @@ void AMGBunkerManager::SelectTarget(FMGBunkerState& State, int32 BunkerIndex, fl
 	for (int32 TargetId = -1; TargetId < AllyCount; ++TargetId)
 	{
 		if (!IsTargetAlive(TargetId) || !IsAware(State, TargetId, Now))
+		{
+			continue;
+		}
+		if (TargetId == PlayerTargetId && !CanAcquirePlayer())
 		{
 			continue;
 		}
@@ -706,6 +733,7 @@ void AMGBunkerManager::UpdateBullets(float DeltaSeconds)
 		enum class EHit { None, World, Ally, Player, Crew, Soldier } HitKind = EHit::None;
 		int32 HitAllyIndex = -1;
 		int32 HitCrewBunkerIndex = -1;
+		FName HitBoneName = NAME_None;
 		const bool bPlayerBullet = Bullet.Source == EMGBulletSource::PlayerRifle;
 
 		FHitResult WorldHit;
@@ -812,20 +840,15 @@ void AMGBunkerManager::UpdateBullets(float DeltaSeconds)
 		}
 		else if (Player != nullptr)
 		{
-			const UCapsuleComponent* Capsule = Player->GetCapsuleComponent();
-			const FVector Center = Capsule->GetComponentLocation();
-			const float HalfHeight = FMath::Max(Capsule->GetScaledCapsuleHalfHeight() - Capsule->GetScaledCapsuleRadius(), 1.f);
-			const FVector AxisBottom = Center - FVector(0.f, 0.f, HalfHeight);
-			const FVector AxisTop = Center + FVector(0.f, 0.f, HalfHeight);
-			FVector OnBullet, OnBody;
-			FMath::SegmentDistToSegmentSafe(Start, End, AxisBottom, AxisTop, OnBullet, OnBody);
-			if (FVector::Dist(OnBullet, OnBody) < Capsule->GetScaledCapsuleRadius())
+			FHitResult BodyHit;
+			if (Player->TraceBody(Start, End, BodyHit))
 			{
-				const float T = FVector::Dist(Start, OnBullet) / FMath::Max(FVector::Dist(Start, End), 1.f);
+				const float T = FVector::Dist(Start, BodyHit.ImpactPoint) / FMath::Max(FVector::Dist(Start, End), 1.f);
 				if (T < HitT)
 				{
 					HitT = T;
-					HitPoint = OnBullet;
+					HitPoint = BodyHit.ImpactPoint;
+					HitBoneName = BodyHit.BoneName;
 					HitKind = EHit::Player;
 				}
 			}
@@ -914,7 +937,7 @@ void AMGBunkerManager::UpdateBullets(float DeltaSeconds)
 			Bullets.RemoveAtSwap(i);
 			break;
 		case EHit::Player:
-			HandlePlayerHit(BulletShooterId(Bullet), HitPoint);
+			HandlePlayerHit(BulletShooterId(Bullet), HitPoint, Bullet.Velocity.GetSafeNormal(), HitBoneName);
 			Bullets.RemoveAtSwap(i);
 			break;
 		case EHit::Crew:
@@ -937,7 +960,8 @@ void AMGBunkerManager::UpdateBullets(float DeltaSeconds)
 	}
 }
 
-void AMGBunkerManager::HandlePlayerHit(int32 SourceBunkerIndex, const FVector& HitPoint)
+void AMGBunkerManager::HandlePlayerHit(int32 SourceBunkerIndex, const FVector& HitPoint,
+	const FVector& ShotDirection, FName BoneName)
 {
 	ABreakingWaveCharacter* Player = GetPlayerCharacter();
 	if (Player == nullptr)
@@ -945,7 +969,8 @@ void AMGBunkerManager::HandlePlayerHit(int32 SourceBunkerIndex, const FVector& H
 		return;
 	}
 
-	Recorder.LogPlayerHit(SourceBunkerIndex, HitPoint, bNoDamage);
+	const bool bHeadshot = Player->IsHeadBone(BoneName);
+	Recorder.LogPlayerHit(SourceBunkerIndex, HitPoint, bNoDamage, BoneName, bHeadshot);
 
 	if (bNoDamage)
 	{
@@ -956,18 +981,16 @@ void AMGBunkerManager::HandlePlayerHit(int32 SourceBunkerIndex, const FVector& H
 		return;
 	}
 
-	if (!bPlayerSpawnCaptured)
+	if (Player->TakeBulletHit(HitPoint, ShotDirection, bHeadshot) != EPlayerHitOutcome::Killed)
 	{
 		return;
 	}
 
 	Recorder.LogPlayerDeath(Player->GetActorLocation());
 
-	Player->SetActorTransform(PlayerSpawnTransform, false, nullptr, ETeleportType::TeleportPhysics);
-	Player->GetCharacterMovement()->StopMovementImmediately();
-	if (APlayerController* PC = Cast<APlayerController>(Player->GetController()))
+	if (ABreakingWavePlayerController* PC = Cast<ABreakingWavePlayerController>(Player->GetController()))
 	{
-		PC->SetControlRotation(PlayerSpawnTransform.Rotator());
+		PC->BeginDeathTransition();
 	}
 }
 

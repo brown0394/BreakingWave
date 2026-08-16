@@ -100,6 +100,26 @@ weirdness. Each entry cost a failed session or a failed feel-check; none of it i
 - BP_FirstPersonCharacter's template touch-UI graph calls DoJumpStart/DoJumpEnd — grep-proof
   any C++ UFUNCTION deletion against BP usage by running any headless pythonscript (it
   loads/compiles the BP) before trusting it.
+- Local variables named `Character` inside an AController subclass **fail the build**:
+  `AController::Character` is a member, and the project builds with `-WarningsAsErrors`,
+  so C4458 (declaration hides class member) is fatal. Same trap awaits `Pawn` and
+  `PlayerState`.
+- `APlayerCameraManager::StartCameraFade` takes `bFadeAudio` — a global audio fade with the
+  screen for one bool, no submix or sound-class work. `bHoldWhenFinished=true` is what keeps
+  the screen black after a fade-out completes.
+- **Skeletal-mesh per-bone hit tests**: `USkeletalMeshComponent::LineTraceComponent` walks the
+  physics-asset `Bodies`, which only exist when the component has a physics asset AND
+  collision is not `NoCollision`. Set `SetCollisionEnabled(QueryOnly)` +
+  `SetCollisionResponseToAllChannels(ECR_Ignore)` — the explicit component call still finds
+  the bodies while nothing else in the world trips over the mesh — then `RecreatePhysicsState()`,
+  then assert `Bodies.Num() > 0`. Also force
+  `VisibilityBasedAnimTickOption = AlwaysTickPoseAndRefreshBones`, or an unrendered mesh's
+  kinematic bodies lag its pose. Fail LOUD if the bodies are missing: a silent empty `Bodies`
+  array means every trace misses, which for a player hit volume reads as invincibility.
+- The stock `Pawn` collision profile **ignores ECC_Visibility**. That is why a bullet's world
+  line trace passes through the player capsule and lets a separate body test win — worth
+  knowing before adding any capsule-blocking channel, which would silently shield the player
+  behind their own capsule.
 
 ## Level / landscape
 

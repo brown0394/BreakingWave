@@ -22,6 +22,35 @@ struct FInputActionValue;
 
 DECLARE_LOG_CATEGORY_EXTERN(LogTemplateCharacter, Log, All);
 
+/** 06_COMBAT.md damage model: head is instant, everything else wounds, the second wound kills */
+UENUM()
+enum class EPlayerHitOutcome : uint8
+{
+	Wounded,
+	Killed,
+};
+
+/** The "I've been hit" jolt — the only wounded feedback in this pass; the persistent presentation is deferred */
+USTRUCT(BlueprintType)
+struct FHitShakeSettings
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	float Duration = 0.35f;
+
+	/** Rotational rattle, decaying over the duration */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	float RattleAmplitudeDeg = 2.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	float RattleFrequency = 24.f;
+
+	/** Push away from the shot's direction of travel — hit from the left throws the view right (07_CAMERA.md) */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	float DirectionalPushDeg = 4.f;
+};
+
 /**
  *  A basic first person character
  */
@@ -205,6 +234,28 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Camera")
 	FHeadbobSettings HeadbobSettings;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Camera")
+	FHitShakeSettings HitShakeSettings;
+
+	/** Torso hits needed to kill; the head bypasses the count entirely (06_COMBAT.md) */
+	UPROPERTY(EditAnywhere, Category="Damage")
+	int32 WoundsToKill = 2;
+
+	/** Physics-asset bodies that count as a head hit. Limb tiering stays an open question (06_COMBAT.md) */
+	UPROPERTY(EditAnywhere, Category="Damage")
+	TArray<FName> HeadBones = { FName("head") };
+
+	/** Slack on the animated mesh bounds used as the bullet broadphase */
+	UPROPERTY(EditAnywhere, Category="Damage")
+	float BodyTraceBoundsPadding = 20.f;
+
+	UPROPERTY(EditAnywhere, Category="Damage")
+	USoundBase* PainSound;
+
+	/** Rounds in the magazine of the man you take over — never a full mag, so the dry click stays unpredictable */
+	UPROPERTY(EditAnywhere, Category="Rifle")
+	int32 TakeoverMagRoundsMin = 3;
+
 	/** Orbit distance of the debug third person camera */
 	UPROPERTY(EditAnywhere, Category="Debug")
 	float DebugThirdPersonDistance = 400.f;
@@ -241,6 +292,8 @@ protected:
 private:
 
 	void FinishReload();
+
+	void SetUpBodyHitVolume();
 
 	void PlayFirstPersonAnim(UAnimSequence* Anim);
 
@@ -314,6 +367,21 @@ private:
 
 	float PreSlideBrakingDecelerationFalling = 0.f;
 
+	int32 WoundsTaken = 0;
+
+	bool bDead = false;
+
+	bool bTransitionInputLocked = false;
+
+	bool bAutoAdvancing = false;
+
+	/** Set when the mesh has no usable physics bodies, so bullets fall back to the capsule instead of passing through a player who can never be hit */
+	bool bBodyTraceUnavailable = false;
+
+	FVector LastHitDirection = FVector::ForwardVector;
+
+	float LastHitTime = -1000.f;
+
 public:
 
 	/** Console command: toggles the debug third person view (shows the world-space body mesh, hides the FP arms) */
@@ -348,6 +416,29 @@ public:
 	bool IsDebugThirdPersonActive() const { return bDebugThirdPersonViewActive; }
 
 	const FHeadbobSettings& GetHeadbobSettings() const { return HeadbobSettings; }
+
+	const FHitShakeSettings& GetHitShakeSettings() const { return HitShakeSettings; }
+
+	/** Direction the round was travelling when it landed; the hit shake pushes the view along it */
+	const FVector& GetLastHitDirection() const { return LastHitDirection; }
+
+	/** Bullet-vs-body test against the animated physics asset — the capsule is not a combat volume (Decision 040) */
+	bool TraceBody(const FVector& Start, const FVector& End, FHitResult& OutHit) const;
+
+	bool IsHeadBone(FName BoneName) const;
+
+	EPlayerHitOutcome TakeBulletHit(const FVector& HitPoint, const FVector& ShotDirection, bool bHeadshot);
+
+	bool IsDead() const { return bDead; }
+
+	/** Hands the pawn over to the death camera: unhides the world-space body, ragdolls it, stops driving anything */
+	void BecomeCorpse();
+
+	/** Opens this life in the state the simulated ally was already in (07_CAMERA.md starting state) */
+	void ApplyTakeoverState(float HeadingYaw, bool bStartProne, bool bAdvancing);
+
+	/** Locked through the fade-in: you watch what this man was doing before you take the reins */
+	void SetTransitionInputLocked(bool bLocked);
 
 	float GetWalkSpeed() const { return WalkSpeed; }
 

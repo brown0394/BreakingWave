@@ -17,9 +17,11 @@
 #include "GameFramework/SpringArmComponent.h"
 #include "Camera/PlayerCameraManager.h"
 #include "HeadbobCameraShake.h"
+#include "HitCameraShake.h"
 #include "TimerManager.h"
 #include "EngineUtils.h"
 #include "MGBunkerSystem.h"
+#include "PhysicsEngine/PhysicsAsset.h"
 #include "BreakingWave.h"
 
 ABreakingWaveCharacter::ABreakingWaveCharacter()
@@ -120,6 +122,35 @@ void ABreakingWaveCharacter::BeginPlay()
 	{
 		RifleReloadSound = LoadObject<USoundBase>(nullptr, TEXT("/Game/Audio/RifleReload.RifleReload"));
 	}
+	if (PainSound == nullptr)
+	{
+		PainSound = LoadObject<USoundBase>(nullptr, TEXT("/Game/Audio/PlayerPain.PlayerPain"));
+	}
+
+	SetUpBodyHitVolume();
+}
+
+void ABreakingWaveCharacter::SetUpBodyHitVolume()
+{
+	USkeletalMeshComponent* Body = GetMesh();
+
+	Body->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones;
+
+	if (Body->GetPhysicsAsset() == nullptr)
+	{
+		Body->SetPhysicsAsset(LoadObject<UPhysicsAsset>(nullptr, TEXT("/Game/Characters/Mannequins/Rigs/PA_Mannequin.PA_Mannequin")));
+	}
+
+	Body->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+	Body->SetCollisionResponseToAllChannels(ECR_Ignore);
+	Body->RecreatePhysicsState();
+
+	bBodyTraceUnavailable = Body->GetPhysicsAsset() == nullptr || Body->Bodies.Num() == 0;
+	if (bBodyTraceUnavailable)
+	{
+		UE_LOG(LogBreakingWave, Error,
+			TEXT("Body mesh has no usable physics bodies — bullets fall back to the capsule and headshots are impossible."));
+	}
 }
 
 void ABreakingWaveCharacter::NotifyControllerChanged()
@@ -198,7 +229,7 @@ void ABreakingWaveCharacter::LookInput(const FInputActionValue& Value)
 
 void ABreakingWaveCharacter::DoAim(float Yaw, float Pitch)
 {
-	if (GetController())
+	if (GetController() && !bTransitionInputLocked && !bDead)
 	{
 		// pass the rotation inputs
 		AddControllerYawInput(Yaw);
@@ -208,7 +239,8 @@ void ABreakingWaveCharacter::DoAim(float Yaw, float Pitch)
 
 void ABreakingWaveCharacter::DoMove(float Right, float Forward)
 {
-	if (GetController() && !IsProne() && !IsProneTransitionActive() && !bAiming)
+	if (GetController() && !IsProne() && !IsProneTransitionActive() && !bAiming
+		&& !bTransitionInputLocked && !bDead)
 	{
 		// pass the move inputs
 		AddMovementInput(GetActorRightVector(), Right);
@@ -223,6 +255,11 @@ bool ABreakingWaveCharacter::IsProneTransitionActive() const
 
 void ABreakingWaveCharacter::DoProneToggle()
 {
+	if (bTransitionInputLocked || bDead)
+	{
+		return;
+	}
+
 	if (bIsCrouched)
 	{
 		UnCrouch();
@@ -286,6 +323,11 @@ void ABreakingWaveCharacter::OnEndCrouch(float HalfHeightAdjust, float ScaledHal
 void ABreakingWaveCharacter::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
+
+	if (bAutoAdvancing && !IsProne() && !IsProneTransitionActive())
+	{
+		AddMovementInput(GetActorForwardVector(), 1.f);
+	}
 
 	const float TargetFov = bAiming ? AimFieldOfView : DefaultFieldOfView;
 	if (!FMath::IsNearlyEqual(FirstPersonCameraComponent->FieldOfView, TargetFov, 0.01f))
@@ -490,7 +532,8 @@ void ABreakingWaveCharacter::DoSprintEnd()
 void ABreakingWaveCharacter::DoFire()
 {
 	const float Now = GetWorld()->GetTimeSeconds();
-	if (bReloading || IsProneTransitionActive() || Now - LastShotTime < RifleProfile.FireIntervalSeconds)
+	if (bReloading || IsProneTransitionActive() || bTransitionInputLocked || bDead
+		|| Now - LastShotTime < RifleProfile.FireIntervalSeconds)
 	{
 		return;
 	}
@@ -539,7 +582,7 @@ void ABreakingWaveCharacter::DoAimEnd()
 
 void ABreakingWaveCharacter::DoReload()
 {
-	if (bReloading || MagRounds >= RifleProfile.MagazineSize)
+	if (bReloading || bTransitionInputLocked || bDead || MagRounds >= RifleProfile.MagazineSize)
 	{
 		return;
 	}
@@ -567,6 +610,124 @@ void ABreakingWaveCharacter::PlayFirstPersonAnim(UAnimSequence* Anim)
 	if (UAnimInstance* AnimInstance = FirstPersonMesh->GetAnimInstance())
 	{
 		AnimInstance->PlaySlotAnimationAsDynamicMontage(Anim, FName("DefaultSlot"), 0.05f, 0.08f);
+	}
+}
+
+bool ABreakingWaveCharacter::TraceBody(const FVector& Start, const FVector& End, FHitResult& OutHit) const
+{
+	if (bDead)
+	{
+		return false;
+	}
+
+	const USkeletalMeshComponent* Body = GetMesh();
+	const FBox BroadPhase = Body->Bounds.GetBox().ExpandBy(BodyTraceBoundsPadding);
+	if (!FMath::LineBoxIntersection(BroadPhase, Start, End, End - Start))
+	{
+		return false;
+	}
+
+	if (bBodyTraceUnavailable)
+	{
+		const UCapsuleComponent* Capsule = GetCapsuleComponent();
+		const FVector Center = Capsule->GetComponentLocation();
+		const float HalfHeight = FMath::Max(
+			Capsule->GetScaledCapsuleHalfHeight() - Capsule->GetScaledCapsuleRadius(), 1.f);
+		FVector OnSegment, OnAxis;
+		FMath::SegmentDistToSegmentSafe(Start, End,
+			Center - FVector(0.f, 0.f, HalfHeight), Center + FVector(0.f, 0.f, HalfHeight), OnSegment, OnAxis);
+		if (FVector::Dist(OnSegment, OnAxis) >= Capsule->GetScaledCapsuleRadius())
+		{
+			return false;
+		}
+		OutHit = FHitResult();
+		OutHit.ImpactPoint = OnSegment;
+		OutHit.Location = OnSegment;
+		return true;
+	}
+
+	return const_cast<USkeletalMeshComponent*>(Body)->LineTraceComponent(
+		OutHit, Start, End, FCollisionQueryParams(SCENE_QUERY_STAT(BulletVsBody), true));
+}
+
+bool ABreakingWaveCharacter::IsHeadBone(FName BoneName) const
+{
+	return HeadBones.Contains(BoneName);
+}
+
+EPlayerHitOutcome ABreakingWaveCharacter::TakeBulletHit(const FVector& HitPoint, const FVector& ShotDirection, bool bHeadshot)
+{
+	LastHitDirection = ShotDirection.GetSafeNormal();
+	LastHitTime = GetWorld()->GetTimeSeconds();
+
+	if (PainSound != nullptr)
+	{
+		UGameplayStatics::PlaySound2D(this, PainSound, 1.f, FMath::FRandRange(0.94f, 1.06f));
+	}
+
+	if (const APlayerController* PlayerController = Cast<APlayerController>(GetController()))
+	{
+		if (PlayerController->PlayerCameraManager != nullptr)
+		{
+			PlayerController->PlayerCameraManager->StartCameraShake(UHitCameraShake::StaticClass());
+		}
+	}
+
+	++WoundsTaken;
+	if (bHeadshot || WoundsTaken >= WoundsToKill)
+	{
+		bDead = true;
+		return EPlayerHitOutcome::Killed;
+	}
+	return EPlayerHitOutcome::Wounded;
+}
+
+void ABreakingWaveCharacter::BecomeCorpse()
+{
+	bDead = true;
+	bAutoAdvancing = false;
+
+	SetActorTickEnabled(false);
+	GetWorldTimerManager().ClearAllTimersForObject(this);
+	GetCharacterMovement()->StopMovementImmediately();
+	GetCharacterMovement()->DisableMovement();
+	GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+
+	FirstPersonMesh->SetVisibility(false);
+	FirstPersonRifleMesh->SetVisibility(false);
+
+	USkeletalMeshComponent* Body = GetMesh();
+	Body->SetFirstPersonPrimitiveType(EFirstPersonPrimitiveType::None);
+	Body->SetOwnerNoSee(false);
+	Body->SetCollisionProfileName(FName("Ragdoll"));
+	Body->SetCollisionResponseToChannel(ECC_Pawn, ECR_Ignore);
+	Body->SetAllBodiesSimulatePhysics(true);
+	Body->WakeAllRigidBodies();
+}
+
+void ABreakingWaveCharacter::ApplyTakeoverState(float HeadingYaw, bool bStartProne, bool bAdvancing)
+{
+	MagRounds = FMath::RandRange(FMath::Min(TakeoverMagRoundsMin, RifleProfile.MagazineSize), RifleProfile.MagazineSize);
+	bAutoAdvancing = bAdvancing;
+
+	SetActorRotation(FRotator(0.f, HeadingYaw, 0.f));
+	if (AController* OwningController = GetController())
+	{
+		OwningController->SetControlRotation(FRotator(0.f, HeadingYaw, 0.f));
+	}
+
+	if (bStartProne)
+	{
+		Crouch();
+	}
+}
+
+void ABreakingWaveCharacter::SetTransitionInputLocked(bool bLocked)
+{
+	bTransitionInputLocked = bLocked;
+	if (!bLocked)
+	{
+		bAutoAdvancing = false;
 	}
 }
 

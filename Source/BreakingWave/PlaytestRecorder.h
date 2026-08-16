@@ -7,6 +7,7 @@ class ABreakingWaveCharacter;
 class UScriptStruct;
 class UWorld;
 struct FAllySimSettings;
+struct FInfantrySettings;
 struct FMGSettings;
 enum class EMGStop : uint8;
 
@@ -22,9 +23,11 @@ namespace Playtest
 	int32 ZoneAtY(float WorldY);
 }
 
-struct FPlaytestRunTally
+/** One life. Death now chains into a takeover instead of resetting to the craft, so the
+    session-level advance is tracked separately in FPlaytestSessionTally. */
+struct FPlaytestLifeTally
 {
-	int32 RunIndex = 0;
+	int32 LifeIndex = 0;
 	float StartTime = 0.f;
 	float StartY = 0.f;
 	float MaxY = 0.f;
@@ -38,15 +41,32 @@ struct FPlaytestRunTally
 	float AdvanceWhileTargetedCm = 0.f;
 	float AdvanceWhileClearCm = 0.f;
 	float ZoneReachSeconds[Playtest::ZoneCount] = { -1.f, -1.f, -1.f, -1.f, -1.f };
+	int32 Wounds = 0;
+	bool bHeadshotDeath = false;
 	bool bNoDamageUsed = false;
+};
+
+/** The continuous advance across chained lives — does the loop ratchet forward, or does the give-back cancel it */
+struct FPlaytestSessionTally
+{
+	float StartTime = 0.f;
+	float FirstY = 0.f;
+	float MaxY = 0.f;
+	int32 Lives = 0;
+	int32 Takeovers = 0;
+	int32 LadderStepsTotal = 0;
+	int32 LadderStepsMax = 0;
+	float GivenBackCm = 0.f;
 };
 
 struct FPlaytestRecorder
 {
-	void BeginSession(UWorld* InWorld, const FMGSettings& MGSettings, const FAllySimSettings* AllySettings);
+	void BeginSession(UWorld* InWorld, const FMGSettings& MGSettings, const FAllySimSettings* AllySettings,
+		const FInfantrySettings* InfantrySettings);
 	void EndSession();
 
-	void SamplePlayer(const ABreakingWaveCharacter* Player, bool bTargetedByLiveGun, int32 StoppedGunCount, float DeltaSeconds);
+	void SamplePlayer(const ABreakingWaveCharacter* Player, bool bTargetedByLiveGun, int32 StoppedGunCount,
+		int32 AlliesInSlab, float DeltaSeconds);
 
 	void LogShot(int32 GunIndex, const FVector& FirePos, int32 TargetId);
 	void LogPlayerShot(const FVector& FirePos);
@@ -56,8 +76,9 @@ struct FPlaytestRecorder
 	void LogCrack(int32 GunIndex, const FVector& NearPoint);
 	void LogWhizz(int32 GunIndex, const FVector& NearPoint);
 	void LogAllyKilled(int32 GunIndex, const FVector& HitPoint);
-	void LogPlayerHit(int32 GunIndex, const FVector& HitPoint, bool bNoDamage);
+	void LogPlayerHit(int32 GunIndex, const FVector& HitPoint, bool bNoDamage, FName BoneName, bool bHeadshot);
 	void LogPlayerDeath(const FVector& DeathPos);
+	void LogTakeover(float DeathAnchorY, const FVector& TakeoverPosition, int32 LadderSteps);
 	void LogStopStart(int32 GunIndex, EMGStop Stop, float DurationSeconds);
 	void LogStopEnd(int32 GunIndex, EMGStop Stop);
 	void LogTargetSwitch(int32 GunIndex, int32 FromId, int32 ToId);
@@ -66,11 +87,11 @@ struct FPlaytestRecorder
 
 private:
 	float Now() const;
-	void StartRun(const FVector& PlayerPos);
+	void StartLife(const FVector& PlayerPos);
 	void AppendEvent(const TCHAR* Event, const FVector& Pos, int32 GunIndex, const FString& Extra);
 	void AppendSettingsDump(const TCHAR* Prefix, const UScriptStruct* StructType, const void* StructValue);
-	FString RunSummaryExtra() const;
-	void PrintRunSummary(const FVector& DeathPos) const;
+	FString LifeSummaryExtra() const;
+	void PrintLifeSummary(const FVector& DeathPos) const;
 	void FlushToDisk();
 
 	TWeakObjectPtr<UWorld> World;
@@ -80,6 +101,7 @@ private:
 	float FlushTimer = 0.f;
 	float LastPlayerY = 0.f;
 	bool bSessionActive = false;
-	bool bRunActive = false;
-	FPlaytestRunTally Run;
+	bool bLifeActive = false;
+	FPlaytestLifeTally Life;
+	FPlaytestSessionTally Session;
 };

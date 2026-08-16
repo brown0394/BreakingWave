@@ -182,3 +182,57 @@ void AAllySimManager::KillAlly(int32 Index)
 		Allies[Index].bAlive = false;
 	}
 }
+
+int32 AAllySimManager::SelectTakeoverSlot(float AnchorY, int32& OutLadderSteps) const
+{
+	const float ForwardEdge = AnchorY + Settings.TakeoverForwardReach;
+
+	float RearLimit = ForwardEdge;
+	for (const FVector& Spawn : SpawnPoints)
+	{
+		RearLimit = FMath::Min(RearLimit, static_cast<float>(Spawn.Y));
+	}
+	RearLimit -= Settings.SpawnLateralSpread;
+
+	TArray<int32, TInlineAllocator<32>> Candidates;
+	OutLadderSteps = 0;
+
+	for (;;)
+	{
+		const float RearEdge = AnchorY - Settings.TakeoverForwardReach - OutLadderSteps * Settings.TakeoverRearStep;
+
+		Candidates.Reset();
+		for (int32 Index = 0; Index < Allies.Num(); ++Index)
+		{
+			const FSimAlly& Ally = Allies[Index];
+			if (Ally.bAlive && Ally.Position.Y >= RearEdge && Ally.Position.Y <= ForwardEdge)
+			{
+				Candidates.Add(Index);
+			}
+		}
+
+		if (Candidates.Num() > 0)
+		{
+			return Candidates[FMath::RandRange(0, Candidates.Num() - 1)];
+		}
+
+		if (RearEdge <= RearLimit)
+		{
+			return INDEX_NONE;
+		}
+		++OutLadderSteps;
+	}
+}
+
+int32 AAllySimManager::CountAlliesInSlab(float AnchorY) const
+{
+	int32 Count = 0;
+	for (const FSimAlly& Ally : Allies)
+	{
+		if (Ally.bAlive && FMath::Abs(Ally.Position.Y - AnchorY) <= Settings.TakeoverForwardReach)
+		{
+			++Count;
+		}
+	}
+	return Count;
+}

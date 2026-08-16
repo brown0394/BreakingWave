@@ -422,7 +422,7 @@ bool AInfantryManager::IsTargetAlive(int32 TargetId) const
 {
 	if (TargetId == PlayerTargetId)
 	{
-		return GetPlayerCharacter() != nullptr;
+		return GetPlayerCharacter() != nullptr && GetWorld()->GetTimeSeconds() >= PlayerAcquireBlockedUntil;
 	}
 	if (TargetId >= 0 && AllySim.IsValid() && AllySim->GetAllies().IsValidIndex(TargetId))
 	{
@@ -506,11 +506,21 @@ void AInfantryManager::PlaySoldierAnim(FInfantrySoldierState& Soldier, UAnimSequ
 
 ABreakingWaveCharacter* AInfantryManager::GetPlayerCharacter() const
 {
-	if (!CachedPlayer.IsValid())
+	ABreakingWaveCharacter* Player = Cast<ABreakingWaveCharacter>(UGameplayStatics::GetPlayerCharacter(GetWorld(), 0));
+	return (Player != nullptr && !Player->IsDead()) ? Player : nullptr;
+}
+
+void AInfantryManager::NotifyPlayerTakeover(float BlockedUntilTime)
+{
+	PlayerAcquireBlockedUntil = BlockedUntilTime;
+
+	for (FInfantrySoldierState& Soldier : Soldiers)
 	{
-		CachedPlayer = Cast<ABreakingWaveCharacter>(UGameplayStatics::GetPlayerCharacter(GetWorld(), 0));
+		if (Soldier.CurrentTargetId == PlayerTargetId)
+		{
+			Soldier.CurrentTargetId = NoTargetId;
+		}
 	}
-	return CachedPlayer.Get();
 }
 
 void AInfantryManager::DrawDebugState() const

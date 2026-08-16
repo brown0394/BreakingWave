@@ -1,6 +1,7 @@
 #include "PlaytestRecorder.h"
 
 #include "BeachAllySim.h"
+#include "BeachInfantrySystem.h"
 #include "BreakingWaveCharacter.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
@@ -40,20 +41,27 @@ static const TCHAR* PlaytestStopName(EMGStop Stop)
 	}
 }
 
-void FPlaytestRecorder::BeginSession(UWorld* InWorld, const FMGSettings& MGSettings, const FAllySimSettings* AllySettings)
+void FPlaytestRecorder::BeginSession(UWorld* InWorld, const FMGSettings& MGSettings, const FAllySimSettings* AllySettings,
+	const FInfantrySettings* InfantrySettings)
 {
 	World = InWorld;
 	const FString Dir = FPaths::ProjectSavedDir() / TEXT("Playtests");
 	IFileManager::Get().MakeDirectory(*Dir, true);
 	CsvPath = Dir / FString::Printf(TEXT("session_%s.csv"), *FDateTime::Now().ToString(TEXT("%Y%m%d_%H%M%S")));
-	PendingLines.Add(TEXT("t,run,event,x,y,z,gun,extra"));
+	PendingLines.Add(TEXT("t,life,event,x,y,z,gun,extra"));
 	bSessionActive = true;
-	bRunActive = false;
-	Run = FPlaytestRunTally();
+	bLifeActive = false;
+	Life = FPlaytestLifeTally();
+	Session = FPlaytestSessionTally();
+	Session.StartTime = Now();
 	AppendSettingsDump(TEXT("MG"), FMGSettings::StaticStruct(), &MGSettings);
 	if (AllySettings != nullptr)
 	{
 		AppendSettingsDump(TEXT("Ally"), FAllySimSettings::StaticStruct(), AllySettings);
+	}
+	if (InfantrySettings != nullptr)
+	{
+		AppendSettingsDump(TEXT("Infantry"), FInfantrySettings::StaticStruct(), InfantrySettings);
 	}
 }
 
@@ -63,16 +71,25 @@ void FPlaytestRecorder::EndSession()
 	{
 		return;
 	}
-	if (bRunActive)
+	if (bLifeActive)
 	{
-		AppendEvent(TEXT("run_abort"), FVector(0.f, LastPlayerY, 0.f), -1, RunSummaryExtra());
+		AppendEvent(TEXT("life_abort"), FVector(0.f, LastPlayerY, 0.f), -1, LifeSummaryExtra());
 	}
+
+	const float MeanLadderSteps = Session.Takeovers > 0
+		? static_cast<float>(Session.LadderStepsTotal) / Session.Takeovers : 0.f;
+	AppendEvent(TEXT("session_end"), FVector(0.f, Session.MaxY, 0.f), -1, FString::Printf(
+		TEXT("dur=%.1f;lives=%d;takeovers=%d;first_y=%.0f;max_y=%.0f;net_advance=%.0f;given_back=%.0f;ladder_mean=%.2f;ladder_max=%d"),
+		Now() - Session.StartTime, Session.Lives, Session.Takeovers, Session.FirstY, Session.MaxY,
+		Session.MaxY - Session.FirstY, Session.GivenBackCm, MeanLadderSteps, Session.LadderStepsMax));
+
 	FlushToDisk();
 	bSessionActive = false;
-	bRunActive = false;
+	bLifeActive = false;
 }
 
-void FPlaytestRecorder::SamplePlayer(const ABreakingWaveCharacter* Player, bool bTargetedByLiveGun, int32 StoppedGunCount, float DeltaSeconds)
+void FPlaytestRecorder::SamplePlayer(const ABreakingWaveCharacter* Player, bool bTargetedByLiveGun, int32 StoppedGunCount,
+	int32 AlliesInSlab, float DeltaSeconds)
 {
 	if (!bSessionActive || Player == nullptr)
 	{
@@ -80,27 +97,28 @@ void FPlaytestRecorder::SamplePlayer(const ABreakingWaveCharacter* Player, bool 
 	}
 
 	const FVector Pos = Player->GetActorLocation();
-	if (!bRunActive)
+	if (!bLifeActive)
 	{
-		StartRun(Pos);
+		StartLife(Pos);
 	}
 
 	const float AdvanceCm = Pos.Y - LastPlayerY;
 	if (AdvanceCm > 0.f)
 	{
-		(bTargetedByLiveGun ? Run.AdvanceWhileTargetedCm : Run.AdvanceWhileClearCm) += AdvanceCm;
+		(bTargetedByLiveGun ? Life.AdvanceWhileTargetedCm : Life.AdvanceWhileClearCm) += AdvanceCm;
 	}
 	LastPlayerY = Pos.Y;
-	Run.MaxY = FMath::Max(Run.MaxY, static_cast<float>(Pos.Y));
+	Life.MaxY = FMath::Max(Life.MaxY, static_cast<float>(Pos.Y));
+	Session.MaxY = FMath::Max(Session.MaxY, static_cast<float>(Pos.Y));
 
-	const int32 StartZone = Playtest::ZoneAtY(Run.StartY);
+	const int32 StartZone = Playtest::ZoneAtY(Life.StartY);
 	const int32 CurrentZone = Playtest::ZoneAtY(Pos.Y);
 	for (int32 Zone = StartZone + 1; Zone <= CurrentZone; ++Zone)
 	{
-		if (Run.ZoneReachSeconds[Zone] < 0.f)
+		if (Life.ZoneReachSeconds[Zone] < 0.f)
 		{
-			const float Split = Now() - Run.StartTime;
-			Run.ZoneReachSeconds[Zone] = Split;
+			const float Split = Now() - Life.StartTime;
+			Life.ZoneReachSeconds[Zone] = Split;
 			AppendEvent(TEXT("zone_cross"), Pos, -1, FString::Printf(TEXT("zone=%d;split=%.1f"), Zone, Split));
 			if (GEngine != nullptr)
 			{
@@ -118,8 +136,10 @@ void FPlaytestRecorder::SamplePlayer(const ABreakingWaveCharacter* Player, bool 
 			Player->IsProne() ? TEXT("prone") :
 			Player->IsSliding() ? TEXT("slide") :
 			Player->GetCharacterMovement()->IsFalling() ? TEXT("air") : TEXT("foot");
-		AppendEvent(TEXT("sample"), Pos, -1, FString::Printf(TEXT("stance=%s;speed=%.0f;targeted=%d;stopped=%d"),
-			Stance, Player->GetVelocity().Size2D(), bTargetedByLiveGun ? 1 : 0, StoppedGunCount));
+		AppendEvent(TEXT("sample"), Pos, -1, FString::Printf(
+			TEXT("stance=%s;speed=%.0f;targeted=%d;stopped=%d;wounds=%d;slab_allies=%d"),
+			Stance, Player->GetVelocity().Size2D(), bTargetedByLiveGun ? 1 : 0, StoppedGunCount,
+			Life.Wounds, AlliesInSlab));
 	}
 
 	FlushTimer += DeltaSeconds;
@@ -132,12 +152,12 @@ void FPlaytestRecorder::SamplePlayer(const ABreakingWaveCharacter* Player, bool 
 
 void FPlaytestRecorder::LogShot(int32 GunIndex, const FVector& FirePos, int32 TargetId)
 {
-	if (bRunActive)
+	if (bLifeActive)
 	{
-		++Run.ShotsTotal;
+		++Life.ShotsTotal;
 		if (TargetId == Playtest::PlayerTargetId)
 		{
-			++Run.ShotsAtPlayer;
+			++Life.ShotsAtPlayer;
 		}
 	}
 	AppendEvent(TEXT("shot"), FirePos, GunIndex, FString::Printf(TEXT("tgt=%d"), TargetId));
@@ -145,21 +165,21 @@ void FPlaytestRecorder::LogShot(int32 GunIndex, const FVector& FirePos, int32 Ta
 
 void FPlaytestRecorder::LogPlayerShot(const FVector& FirePos)
 {
-	if (bRunActive)
+	if (bLifeActive)
 	{
-		++Run.PlayerShotsFired;
+		++Life.PlayerShotsFired;
 	}
 	AppendEvent(TEXT("pshot"), FirePos, Playtest::PlayerTargetId, FString());
 }
 
 void FPlaytestRecorder::LogInfantryShot(int32 SoldierIndex, const FVector& FirePos, int32 TargetId)
 {
-	if (bRunActive)
+	if (bLifeActive)
 	{
-		++Run.ShotsTotal;
+		++Life.ShotsTotal;
 		if (TargetId == Playtest::PlayerTargetId)
 		{
-			++Run.ShotsAtPlayer;
+			++Life.ShotsAtPlayer;
 		}
 	}
 	AppendEvent(TEXT("inf_shot"), FirePos, 1000 + SoldierIndex, FString::Printf(TEXT("tgt=%d"), TargetId));
@@ -167,9 +187,9 @@ void FPlaytestRecorder::LogInfantryShot(int32 SoldierIndex, const FVector& FireP
 
 void FPlaytestRecorder::LogInfantryDown(int32 SoldierIndex, const FVector& HitPoint)
 {
-	if (bRunActive)
+	if (bLifeActive)
 	{
-		++Run.InfantryDowned;
+		++Life.InfantryDowned;
 	}
 	AppendEvent(TEXT("inf_down"), HitPoint, 1000 + SoldierIndex, FString());
 }
@@ -181,18 +201,18 @@ void FPlaytestRecorder::LogImpact(int32 GunIndex, const FVector& HitPoint)
 
 void FPlaytestRecorder::LogCrack(int32 GunIndex, const FVector& NearPoint)
 {
-	if (bRunActive)
+	if (bLifeActive)
 	{
-		++Run.CracksHeard;
+		++Life.CracksHeard;
 	}
 	AppendEvent(TEXT("crack"), NearPoint, GunIndex, FString());
 }
 
 void FPlaytestRecorder::LogWhizz(int32 GunIndex, const FVector& NearPoint)
 {
-	if (bRunActive)
+	if (bLifeActive)
 	{
-		++Run.WhizzesHeard;
+		++Life.WhizzesHeard;
 	}
 	AppendEvent(TEXT("whizz"), NearPoint, GunIndex, FString());
 }
@@ -202,29 +222,47 @@ void FPlaytestRecorder::LogAllyKilled(int32 GunIndex, const FVector& HitPoint)
 	AppendEvent(TEXT("ally_death"), HitPoint, GunIndex, FString());
 }
 
-void FPlaytestRecorder::LogPlayerHit(int32 GunIndex, const FVector& HitPoint, bool bNoDamage)
+void FPlaytestRecorder::LogPlayerHit(int32 GunIndex, const FVector& HitPoint, bool bNoDamage, FName BoneName, bool bHeadshot)
 {
-	if (bRunActive)
+	if (bLifeActive)
 	{
-		++Run.PlayerHits;
+		++Life.PlayerHits;
 		if (bNoDamage)
 		{
-			Run.bNoDamageUsed = true;
+			Life.bNoDamageUsed = true;
+		}
+		else
+		{
+			++Life.Wounds;
+			Life.bHeadshotDeath = bHeadshot;
 		}
 	}
-	AppendEvent(TEXT("hit_player"), HitPoint, GunIndex, FString::Printf(TEXT("nodmg=%d"), bNoDamage ? 1 : 0));
+	AppendEvent(TEXT("hit_player"), HitPoint, GunIndex, FString::Printf(TEXT("nodmg=%d;bone=%s;head=%d"),
+		bNoDamage ? 1 : 0, *BoneName.ToString(), bHeadshot ? 1 : 0));
 }
 
 void FPlaytestRecorder::LogPlayerDeath(const FVector& DeathPos)
 {
-	if (!bSessionActive || !bRunActive)
+	if (!bSessionActive || !bLifeActive)
 	{
 		return;
 	}
-	AppendEvent(TEXT("death"), DeathPos, -1, RunSummaryExtra());
-	PrintRunSummary(DeathPos);
+	AppendEvent(TEXT("death"), DeathPos, -1, LifeSummaryExtra());
+	PrintLifeSummary(DeathPos);
 	FlushToDisk();
-	bRunActive = false;
+	bLifeActive = false;
+}
+
+void FPlaytestRecorder::LogTakeover(float DeathAnchorY, const FVector& TakeoverPosition, int32 LadderSteps)
+{
+	++Session.Takeovers;
+	Session.LadderStepsTotal += LadderSteps;
+	Session.LadderStepsMax = FMath::Max(Session.LadderStepsMax, LadderSteps);
+	Session.GivenBackCm += FMath::Max(0.f, DeathAnchorY - static_cast<float>(TakeoverPosition.Y));
+
+	AppendEvent(TEXT("takeover"), TakeoverPosition, -1, FString::Printf(
+		TEXT("death_y=%.0f;given_back=%.0f;ladder=%d"),
+		DeathAnchorY, DeathAnchorY - TakeoverPosition.Y, LadderSteps));
 }
 
 void FPlaytestRecorder::LogStopStart(int32 GunIndex, EMGStop Stop, float DurationSeconds)
@@ -253,9 +291,9 @@ void FPlaytestRecorder::LogCrewKilled(int32 GunIndex, int32 CrewRemaining)
 
 void FPlaytestRecorder::LogNoDamageToggle(bool bEnabled)
 {
-	if (bEnabled && bRunActive)
+	if (bEnabled && bLifeActive)
 	{
-		Run.bNoDamageUsed = true;
+		Life.bNoDamageUsed = true;
 	}
 	AppendEvent(TEXT("nodamage"), FVector::ZeroVector, -1,
 		FString::Printf(TEXT("enabled=%d"), bEnabled ? 1 : 0));
@@ -266,18 +304,26 @@ float FPlaytestRecorder::Now() const
 	return World.IsValid() ? World->GetTimeSeconds() : 0.f;
 }
 
-void FPlaytestRecorder::StartRun(const FVector& PlayerPos)
+void FPlaytestRecorder::StartLife(const FVector& PlayerPos)
 {
-	const int32 NextIndex = Run.RunIndex + 1;
-	Run = FPlaytestRunTally();
-	Run.RunIndex = NextIndex;
-	Run.StartTime = Now();
-	Run.StartY = PlayerPos.Y;
-	Run.MaxY = PlayerPos.Y;
+	const int32 NextIndex = Life.LifeIndex + 1;
+	Life = FPlaytestLifeTally();
+	Life.LifeIndex = NextIndex;
+	Life.StartTime = Now();
+	Life.StartY = PlayerPos.Y;
+	Life.MaxY = PlayerPos.Y;
 	LastPlayerY = PlayerPos.Y;
 	SampleTimer = Playtest::SampleIntervalSeconds;
-	bRunActive = true;
-	AppendEvent(TEXT("run_start"), PlayerPos, -1, FString());
+	bLifeActive = true;
+
+	++Session.Lives;
+	if (Session.Lives == 1)
+	{
+		Session.FirstY = PlayerPos.Y;
+		Session.MaxY = PlayerPos.Y;
+	}
+
+	AppendEvent(TEXT("life_start"), PlayerPos, -1, FString());
 }
 
 void FPlaytestRecorder::AppendEvent(const TCHAR* Event, const FVector& Pos, int32 GunIndex, const FString& Extra)
@@ -287,7 +333,7 @@ void FPlaytestRecorder::AppendEvent(const TCHAR* Event, const FVector& Pos, int3
 		return;
 	}
 	PendingLines.Add(FString::Printf(TEXT("%.2f,%d,%s,%.0f,%.0f,%.0f,%d,%s"),
-		Now(), Run.RunIndex, Event, Pos.X, Pos.Y, Pos.Z, GunIndex, *Extra));
+		Now(), Life.LifeIndex, Event, Pos.X, Pos.Y, Pos.Z, GunIndex, *Extra));
 }
 
 void FPlaytestRecorder::AppendSettingsDump(const TCHAR* Prefix, const UScriptStruct* StructType, const void* StructValue)
@@ -301,31 +347,33 @@ void FPlaytestRecorder::AppendSettingsDump(const TCHAR* Prefix, const UScriptStr
 	}
 }
 
-FString FPlaytestRecorder::RunSummaryExtra() const
+FString FPlaytestRecorder::LifeSummaryExtra() const
 {
-	return FString::Printf(TEXT("dur=%.1f;maxy=%.0f;shots_at=%d;hits=%d;cracks=%d;whizzes=%d;adv_targeted=%.0f;adv_clear=%.0f;nodmg=%d;pshots=%d;inf_down=%d"),
-		Now() - Run.StartTime, Run.MaxY, Run.ShotsAtPlayer, Run.PlayerHits, Run.CracksHeard, Run.WhizzesHeard,
-		Run.AdvanceWhileTargetedCm, Run.AdvanceWhileClearCm, Run.bNoDamageUsed ? 1 : 0, Run.PlayerShotsFired, Run.InfantryDowned);
+	return FString::Printf(TEXT("dur=%.1f;starty=%.0f;maxy=%.0f;ground=%.0f;shots_at=%d;hits=%d;wounds=%d;head=%d;cracks=%d;whizzes=%d;adv_targeted=%.0f;adv_clear=%.0f;nodmg=%d;pshots=%d;inf_down=%d"),
+		Now() - Life.StartTime, Life.StartY, Life.MaxY, Life.MaxY - Life.StartY,
+		Life.ShotsAtPlayer, Life.PlayerHits, Life.Wounds, Life.bHeadshotDeath ? 1 : 0, Life.CracksHeard, Life.WhizzesHeard,
+		Life.AdvanceWhileTargetedCm, Life.AdvanceWhileClearCm, Life.bNoDamageUsed ? 1 : 0, Life.PlayerShotsFired, Life.InfantryDowned);
 }
 
-void FPlaytestRecorder::PrintRunSummary(const FVector& DeathPos) const
+void FPlaytestRecorder::PrintLifeSummary(const FVector& DeathPos) const
 {
-	const float Duration = Now() - Run.StartTime;
+	const float Duration = Now() - Life.StartTime;
 	const int32 DeathZone = Playtest::ZoneAtY(DeathPos.Y);
 	FString Splits;
 	for (int32 Zone = 1; Zone < Playtest::ZoneCount; ++Zone)
 	{
-		Splits += Run.ZoneReachSeconds[Zone] >= 0.f
-			? FString::Printf(TEXT("Z%d %.1fs  "), Zone, Run.ZoneReachSeconds[Zone])
+		Splits += Life.ZoneReachSeconds[Zone] >= 0.f
+			? FString::Printf(TEXT("Z%d %.1fs  "), Zone, Life.ZoneReachSeconds[Zone])
 			: FString::Printf(TEXT("Z%d --  "), Zone);
 	}
-	const float HitPercent = Run.ShotsAtPlayer > 0 ? 100.f * Run.PlayerHits / Run.ShotsAtPlayer : 0.f;
+	const float HitPercent = Life.ShotsAtPlayer > 0 ? 100.f * Life.PlayerHits / Life.ShotsAtPlayer : 0.f;
 	const FString Text = FString::Printf(
-		TEXT("RUN %d  %.1fs  died Zone %d  advanced %.0fm\nshots at you %d  hits %d (%.1f%%)  cracks %d  whizzes %d  you fired %d  infantry downed %d\nadvance while targeted %.0fm | while clear %.0fm\nsplits: %s%s"),
-		Run.RunIndex, Duration, DeathZone, (Run.MaxY - Run.StartY) / 100.f,
-		Run.ShotsAtPlayer, Run.PlayerHits, HitPercent, Run.CracksHeard, Run.WhizzesHeard, Run.PlayerShotsFired, Run.InfantryDowned,
-		Run.AdvanceWhileTargetedCm / 100.f, Run.AdvanceWhileClearCm / 100.f,
-		*Splits, Run.bNoDamageUsed ? TEXT("\n(no-damage used this run)") : TEXT(""));
+		TEXT("LIFE %d  %.1fs  %s in Zone %d  ground %+.0fm (session best %.0fm)\nshots at you %d  hits %d (%.1f%%)  cracks %d  whizzes %d  you fired %d  infantry downed %d\nadvance while targeted %.0fm | while clear %.0fm\nsplits: %s%s"),
+		Life.LifeIndex, Duration, Life.bHeadshotDeath ? TEXT("headshot") : TEXT("bled out"), DeathZone,
+		(Life.MaxY - Life.StartY) / 100.f, (Session.MaxY - Session.FirstY) / 100.f,
+		Life.ShotsAtPlayer, Life.PlayerHits, HitPercent, Life.CracksHeard, Life.WhizzesHeard, Life.PlayerShotsFired, Life.InfantryDowned,
+		Life.AdvanceWhileTargetedCm / 100.f, Life.AdvanceWhileClearCm / 100.f,
+		*Splits, Life.bNoDamageUsed ? TEXT("\n(no-damage used this life)") : TEXT(""));
 	UE_LOG(LogTemp, Log, TEXT("Playtest %s"), *Text);
 	if (GEngine != nullptr)
 	{

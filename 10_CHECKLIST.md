@@ -75,29 +75,37 @@ Legend: `[x]` done · `[~]` partially done · `[ ]` not started.
 ## Step 4 — Getting Hit and Dying
 > Goal: Feel "get hit and die."
 
-- [ ] Implement hit detection (raycast-based)
-- [ ] Location-based damage (headshot = instant, body = two-shot)
-- [ ] Wounded state presentation
+> **Built 2026-08-16 (Decisions 039–040), NOT yet play-tested.** The damage *state* and the
+> death camera *geometry* landed with the transition pass; the persistent wounded
+> presentation and the death-camera filters were deliberately deferred to a later polish
+> pass, because neither changes how often or how legibly the death→takeover seam fires.
+
+- [x] Implement hit detection — mesh-authoritative: bounds broadphase + `LineTraceComponent`
+  against the physics asset. The capsule is no longer a combat volume
+- [x] Location-based damage (headshot = instant, body = two-shot). Limb tier still open
+- [~] Wounded state presentation — DEFERRED as a block (Decision 039)
   - [ ] Red vignette (post-process)
   - [ ] Headbob stagger pattern
   - [ ] Reduced movement speed
   - [ ] Breathing/heartbeat audio
   - [ ] Increased aim sway
-- [ ] Hit camera
-  - [ ] Camera shake
-  - [ ] Hit direction hint (push)
-  - [ ] Pain sound
-- [ ] Death camera (semi-scripted)
-  - [ ] Camera fall (1.5–2 seconds, ease-out)
-  - [ ] Tilt
-  - [ ] Vision blur + narrowing
-  - [ ] Audio low-pass filter
-  - [ ] Terrain clip prevention (LineTrace lower bound)
-  - [ ] Fade out
+- [x] Hit camera — `UHitCameraShake`
+  - [x] Camera shake
+  - [x] Hit direction hint (push along the round's travel)
+  - [x] Pain sound — Tools/GeneratePlayerPainAudio.py (**tool written, not yet run**)
+- [~] Death camera (semi-scripted)
+  - [x] Camera fall (ease-out) — scripted `ACameraActor`, never the ragdoll
+  - [x] Tilt
+  - [ ] Vision blur + narrowing — deferred (needs a post-process material)
+  - [~] Audio low-pass filter — deferred; audio fades with the screen instead
+    (`StartCameraFade` `bFadeAudio`)
+  - [x] Terrain clip prevention (LineTrace lower bound)
+  - [x] Fade out
 - [ ] Play it yourself and check
-  - [ ] Does the wounded state feel real?
+  - [ ] Can you tell a survived hit from a miss on the shake and grunt alone?
   - [ ] Is the death moment emotional?
   - [ ] Does the camera clip into terrain?
+  - [ ] Is prone still worth doing now that it is a real body on the ground?
 
 **When done**: Record death camera fall values and wounded state values in 07_CAMERA.md.
 **Relevant docs**: 07_CAMERA.md, 06_COMBAT.md
@@ -107,20 +115,28 @@ Legend: `[x]` done · `[~]` partially done · `[ ]` not started.
 ## Step 5 — Narrative + Transition
 > Goal: One full loop. Proof that this game exists.
 
+> **Mechanical half BUILT 2026-08-16 (Decisions 038–040), NOT yet play-tested.** The loop —
+> death camera → fade → take over a nearby living ally → targeting delay → control — exists,
+> with the narrative screen as a state of zero duration between FadeOut and the takeover.
+> The narrative half (screen Option A vs B, text display, inserting the written narrative)
+> drops into that seam without reshaping anything around it.
+
 - [ ] Implement narrative screen
   - [ ] Option A: black background + white text
   - [ ] Option B: final view residue + text
   - [ ] Text display (one sentence at a time, fade-in or typing)
   - [ ] Compare both options → choose one
-- [ ] Spawn second character Pawn
-- [ ] Implement transition system
-  - [ ] Death → narrative → fade in → possess new character
-  - [ ] Starting state per zone (already running, already prone, etc.)
-  - [ ] Enemy targeting delay (1–2 seconds)
+- [x] Spawn next character Pawn — a new pawn per life, possessed on takeover (Decision 040)
+- [x] Implement transition system
+  - [x] Death → [narrative, zero duration] → fade in → possess new character
+  - [x] Starting state — inherited from the sim ally (heading, stance, motion), not scripted
+    per zone. The Zone 0 "inside the landing craft" row of 07_CAMERA.md's table is NOT
+    delivered by this pass; it needs Step 6's real allies
+  - [x] Enemy targeting delay — awareness lockout (MG) + flat exclusion (infantry)
 - [ ] Insert first character narrative text (your original writing)
 - [ ] Play it yourself
-  - [ ] Does the flow of run → die → story → new eyes open feel smooth?
-  - [ ] Is the transition from narrative seamless?
+  - [ ] Does the flow of run → die → new eyes open feel smooth? (no story in the seam yet)
+  - [ ] Is ~3.5 s death-to-control the right leash at this frequency?
   - [ ] Does the emotion carry through?
 
 **When this step is done, the core loop is running.**

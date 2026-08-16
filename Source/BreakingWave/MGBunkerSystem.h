@@ -437,6 +437,11 @@ public:
 
 	void ToggleDebug();
 
+	/** Every gun forgets the man who just died and cannot acquire the new one until BlockedUntilTime
+	    (07_CAMERA.md §4). Awareness lockout rather than a scoring ban, so the normal perception ramp
+	    still has to run when the window closes instead of three guns snapping on at once. */
+	void NotifyPlayerTakeover(float BlockedUntilTime, float DeathAnchorY, const FVector& TakeoverPosition, int32 LadderSteps);
+
 protected:
 	virtual void BeginPlay() override;
 
@@ -477,7 +482,9 @@ private:
 
 	void UpdateBullets(float DeltaSeconds);
 
-	void HandlePlayerHit(int32 ShooterId, const FVector& HitPoint);
+	void HandlePlayerHit(int32 ShooterId, const FVector& HitPoint, const FVector& ShotDirection, FName BoneName);
+
+	bool CanAcquirePlayer() const;
 
 	void KillCrewMemberOnBunker(int32 BunkerIndex);
 
@@ -530,11 +537,8 @@ private:
 
 	TWeakObjectPtr<class AInfantryManager> Infantry;
 
-	mutable TWeakObjectPtr<ABreakingWaveCharacter> CachedPlayer;
-
-	FTransform PlayerSpawnTransform;
-
-	bool bPlayerSpawnCaptured = false;
+	/** Guns cannot see the player until this time; set on takeover, never on a bare respawn */
+	float PlayerAcquireBlockedUntil = -1.f;
 
 	bool bNoDamage = false;
 

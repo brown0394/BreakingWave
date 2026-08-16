@@ -204,6 +204,9 @@ public:
 	/** Player fire landing near a risen soldier scares him down (flinch layer) */
 	void NotifyImpactNear(const FVector& ImpactPoint);
 
+	/** Riflemen also need time to pick out a new man; a flat exclusion, since infantry carry no awareness model */
+	void NotifyPlayerTakeover(float BlockedUntilTime);
+
 	void SetDebugDraw(bool bEnabled) { bDebug = bEnabled; }
 
 	const FInfantrySettings& GetSettings() const { return Settings; }
@@ -277,7 +280,7 @@ private:
 
 	TWeakObjectPtr<AAllySimManager> AllySim;
 
-	mutable TWeakObjectPtr<ABreakingWaveCharacter> CachedPlayer;
+	float PlayerAcquireBlockedUntil = -1.f;
 
 	bool bDebug = false;
 };

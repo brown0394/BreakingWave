@@ -102,6 +102,12 @@ Placed in Zones 0~2. People advancing up the beach.
 2~3 candidates per zone. Random selection from nearby candidates based on death zone.
 If all candidates in a zone are dead, expand to adjacent zone candidates.
 
+> **Superseded in shape by Decision 038 (2026-08-11)** for the system being built now:
+> "nearby" is a **±20 m window in Y around the death point, at any X across the beach
+> width** — not a zone band, which at 60–100 m deep is looser than intended. Candidates
+> are anonymous live ally-sim slots, not authored characters; the authored registry
+> above waits on narrative volume.
+
 ### German Character Pool
 Placed in Zones 3~4. People looking down at the beach.
 Trench infantry, foxhole riflemen, bunker MG gunners — ordinary soldiers, no officer story.
