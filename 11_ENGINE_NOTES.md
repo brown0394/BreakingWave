@@ -116,6 +116,16 @@ weirdness. Each entry cost a failed session or a failed feel-check; none of it i
   `VisibilityBasedAnimTickOption = AlwaysTickPoseAndRefreshBones`, or an unrendered mesh's
   kinematic bodies lag its pose. Fail LOUD if the bodies are missing: a silent empty `Bodies`
   array means every trace misses, which for a player hit volume reads as invincibility.
+- **A ragdoll inherits the kinematic velocity of the mesh it was.** Switching bodies to
+  `SetAllBodiesSimulatePhysics(true)` hands each one the velocity the physics engine measured
+  while it was being driven kinematically — the character's full run speed, and
+  `StopMovementImmediately()` on the movement component does NOT clear it (it zeroes the CMC,
+  not the bodies). At our 900 uu/s sprint that launches the corpse metres down the beach,
+  reading weightless. Set the velocity explicitly after enabling simulation
+  (`SetAllPhysicsLinearVelocity` / `SetAllPhysicsAngularVelocityInRadians`) and set
+  `LinearDamping`/`AngularDamping` per `FBodyInstance` followed by `UpdateDampingProperties()`.
+  Keep linear damping well under ~2: damping fights gravity too (terminal speed ≈ 980/damping),
+  so a high value turns the fall itself floaty — the opposite of the fix.
 - The stock `Pawn` collision profile **ignores ECC_Visibility**. That is why a bullet's world
   line trace passes through the player capsule and lets a separate body test win — worth
   knowing before adding any capsule-blocking channel, which would silently shield the player

@@ -21,6 +21,7 @@
 #include "TimerManager.h"
 #include "EngineUtils.h"
 #include "MGBunkerSystem.h"
+#include "PhysicsEngine/BodyInstance.h"
 #include "PhysicsEngine/PhysicsAsset.h"
 #include "BreakingWave.h"
 
@@ -687,6 +688,8 @@ void ABreakingWaveCharacter::BecomeCorpse()
 	bDead = true;
 	bAutoAdvancing = false;
 
+	const FVector MomentumAtDeath = GetVelocity();
+
 	SetActorTickEnabled(false);
 	GetWorldTimerManager().ClearAllTimersForObject(this);
 	GetCharacterMovement()->StopMovementImmediately();
@@ -703,6 +706,21 @@ void ABreakingWaveCharacter::BecomeCorpse()
 	Body->SetCollisionResponseToChannel(ECC_Pawn, ECR_Ignore);
 	Body->SetAllBodiesSimulatePhysics(true);
 	Body->WakeAllRigidBodies();
+
+	for (FBodyInstance* BodyInstance : Body->Bodies)
+	{
+		if (BodyInstance)
+		{
+			BodyInstance->LinearDamping = CorpseSettings.LinearDamping;
+			BodyInstance->AngularDamping = CorpseSettings.AngularDamping;
+			BodyInstance->UpdateDampingProperties();
+		}
+	}
+
+	const FVector LandingVelocity = MomentumAtDeath * CorpseSettings.MomentumRetained
+		- FVector::UpVector * CorpseSettings.DropSpeed;
+	Body->SetAllPhysicsLinearVelocity(LandingVelocity);
+	Body->SetAllPhysicsAngularVelocityInRadians(FVector::ZeroVector);
 }
 
 void ABreakingWaveCharacter::ApplyTakeoverState(float HeadingYaw, bool bStartProne, bool bAdvancing)

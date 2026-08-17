@@ -6,13 +6,13 @@
 > lives in git log; the why of past choices lives in 03_DECISIONS.md; engine gotchas live
 > in 11_ENGINE_NOTES.md. When updating, replace stale facts instead of appending below them.
 
-## Phase: Steps 4+5 mechanical loop BUILT and compiled 2026-08-16 — NOT YET PLAY-TESTED. The whole spec is now settled (Decisions 038 complete, 039, 040)
+## Phase: Steps 4+5 mechanical loop BUILT, and FIRST SEEN RUNNING 2026-08-17 — user's read: "things look good". The whole spec is settled (Decisions 038 complete, 039, 040)
 
-The death → takeover loop exists: two-shot damage on mesh-resolved hits, death camera,
-fade, ally selection, new pawn, targeting delay, corpses, restructured telemetry.
-Compiles clean. **Nothing in it has been seen running yet** — the next session is a PIE
-feel-check, and it is also the first session in which the rifle and the Z3 infantry
-firefight become reachable at all.
+The death → takeover loop exists and closes: two-shot damage on mesh-resolved hits, death
+camera, fade, ally selection, new pawn, targeting delay, corpses, restructured telemetry.
+First PIE pass 2026-08-17 turned up one flaw — the corpse ragdoll flew too far and too
+light (fixed same day, see the corpse weight pass below). The rest of the feel-check list
+below is still unanswered, and the rifle + Z3 infantry firefight are only now reachable.
 
 The bare-respawn scaffolding is GONE (`PlayerSpawnTransform` deleted). `MGNoDamage`
 remains for observation; silence itself still signals MG stops (per-type stop sounds wait
@@ -212,7 +212,13 @@ more system work (user decision 2026-07-04) — pick them up before tuning zone 
     and re-searches each tick (never a bare respawn)
   - A NEW PAWN is spawned and possessed per life. The old one becomes a ragdoll corpse
     (`BecomeCorpse`), capped by `MaxCorpses` (8, EditAnywhere), oldest retired first;
-    ragdoll ignores ECC_Pawn so corpses can't wall you in
+    ragdoll ignores ECC_Pawn so corpses can't wall you in. **Corpse weight pass 2026-08-17**
+    (first PIE observation — the body sailed too far and read weightless): the ragdoll was
+    inheriting the mesh's full kinematic sprint velocity, so `FCorpseSettings` on the
+    character now keeps only `MomentumRetained` (0.2) of it, adds a `DropSpeed` (150) downward
+    kick at the moment of death, and applies `LinearDamping` (0.75) / `AngularDamping` (4) to
+    every body. ALL FOUR TENTATIVE — `MomentumRetained` is the lever for distance,
+    `AngularDamping` for the windmilling
   - Takeover state: control rotation from the ally's `HeadingYaw`, `Crouch()` if he was
     prone, forced forward input through the fade if he was advancing, magazine
     `RandRange(TakeoverMagRoundsMin 3, MagazineSize)`. Input is locked for the whole
@@ -307,9 +313,10 @@ more system work (user decision 2026-07-04) — pick them up before tuning zone 
   IMC_Default, sets the BP action slots; idempotent, headless OK (already run, disk-verified)
 - [x] Tools/GenerateRifleAudio.py — synthesizes + imports the 5 rifle placeholder sounds;
   idempotent, headless OK (already run, disk-verified)
-- [ ] Tools/GeneratePlayerPainAudio.py — synthesizes + imports the pain grunt
-  (/Game/Audio/PlayerPain); idempotent, headless OK. **NOT YET RUN** — run it before the
-  first feel-check or the only wounded feedback in the build is silent
+- [x] Tools/GeneratePlayerPainAudio.py — synthesizes + imports the pain grunt
+  (/Game/Audio/PlayerPain); idempotent, headless OK. RUN 2026-08-17, disk-verified
+  (0.45 s voiced grunt + breath). The commandlet exits 1 on the harmless BINKA-decoder
+  ensure, as every sound import does — judge it by the .uasset timestamp, not the exit code
 - [x] Tools/RetargetInfantryAnims.py — retargets the 5 ASP infantry-cycle anims reusing the
   prone pass's rigs/retargeter; needs `-ExecutePythonScript` full-editor mode (already run;
   BakeIKBonesFromFK.py re-run after, all 24 Retarget anims baked, disk-verified)
@@ -343,18 +350,14 @@ more system work (user decision 2026-07-04) — pick them up before tuning zone 
 
 - [x] ~~Pre-flight: verify the infantry level save~~ — DONE 2026-08-16, verified from the
   external-actor files on disk. The 7 soldiers, the manager and the parapets are all there
-- [ ] **PRE-FLIGHT, before any PIE: run `Tools/GeneratePlayerPainAudio.py`** (headless OK, absolute -script path) —
-  the pain grunt is the ONLY wounded feedback this pass has, and the character
-  fallback-loads `/Game/Audio/PlayerPain`. Without it a survived hit is a silent no-op
-- [ ] **RESUME HERE — first PIE feel-check of the whole loop.** Nothing below has been
-  seen running. In order:
-  - **Does the loop close at all?** Die → camera falls → black → new eyes. Watch for the
-    two known failure modes: an infinite black screen (the takeover found nobody —
-    look for the `AllySimManager` Error in the log), and a player who cannot be hit
-    (look for the `no usable physics bodies` Error; the capsule fallback keeps you
-    mortal but kills headshots). Also worth an early sanity check: hits must register at
-    all — the mesh hit volume has never been exercised, so `hits` staying at 0 across a
-    session while `shots_at` climbs is the signal that the trace is finding nothing
+- [x] ~~Pre-flight: run `Tools/GeneratePlayerPainAudio.py`~~ — DONE 2026-08-17,
+  `Content/Audio/PlayerPain.uasset` disk-verified. **Pre-flight is now clear; PIE is
+  unblocked**
+- [ ] **RESUME HERE — the feel-check, continued.** In order:
+  - [x] ~~**Does the loop close at all?**~~ YES — first PIE 2026-08-17, user read "things
+    look good". Neither known failure mode appeared (no infinite black screen, and the
+    player was hittable, so the mesh trace is finding bodies). The one flaw seen was the
+    corpse ragdoll's flight, fixed the same day
   - **Does two-shot read?** You should be able to tell a survived hit from a miss on the
     shake and grunt alone. If not, the tell is too weak and the persistent presentation
     stops being deferrable

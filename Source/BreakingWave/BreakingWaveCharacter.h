@@ -51,6 +51,30 @@ struct FHitShakeSettings
 	float DirectionalPushDeg = 4.f;
 };
 
+/** How the body lands. A dead man drops; he does not sail on at sprint speed */
+USTRUCT(BlueprintType)
+struct FCorpseSettings
+{
+	GENERATED_BODY()
+
+	/** Fraction of the running speed the ragdoll keeps. The physics bodies otherwise inherit the full
+	 *  kinematic velocity of the sprint (900 uu/s) and throw the corpse metres down the beach */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	float MomentumRetained = 0.2f;
+
+	/** Bleeds off the remaining slide so the body settles where it fell instead of skating */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	float LinearDamping = 0.75f;
+
+	/** Kills the weightless windmilling that reads as a rag rather than a body */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	float AngularDamping = 4.f;
+
+	/** Downward kick at the moment of death — the collapse starts immediately instead of drifting into it */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	float DropSpeed = 150.f;
+};
+
 /**
  *  A basic first person character
  */
@@ -236,6 +260,9 @@ protected:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Camera")
 	FHitShakeSettings HitShakeSettings;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Damage")
+	FCorpseSettings CorpseSettings;
 
 	/** Torso hits needed to kill; the head bypasses the count entirely (06_COMBAT.md) */
 	UPROPERTY(EditAnywhere, Category="Damage")
