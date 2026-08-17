@@ -17,6 +17,9 @@ namespace Playtest
 	constexpr float ZoneBoundariesY[6] = { -25400.f, -19400.f, -11400.f, -2400.f, 7600.f, 15600.f };
 	constexpr int32 ZoneCount = 5;
 	constexpr int32 PlayerTargetId = -1;
+	/** Shooter ids in the CSV's gun column: MG bunkers are 0..n, infantry soldiers sit above this offset.
+	    Tools/AnalyzePlaytests.py attributes hits by this boundary — keep the two in sync. */
+	constexpr int32 InfantryShooterIdBase = 1000;
 	constexpr float SampleIntervalSeconds = 0.5f;
 	constexpr float FlushIntervalSeconds = 5.f;
 
@@ -54,8 +57,7 @@ struct FPlaytestSessionTally
 	float MaxY = 0.f;
 	int32 Lives = 0;
 	int32 Takeovers = 0;
-	int32 LadderStepsTotal = 0;
-	int32 LadderStepsMax = 0;
+	int32 Manufactured = 0;
 	float GivenBackCm = 0.f;
 };
 
@@ -66,7 +68,7 @@ struct FPlaytestRecorder
 	void EndSession();
 
 	void SamplePlayer(const ABreakingWaveCharacter* Player, bool bTargetedByLiveGun, int32 StoppedGunCount,
-		int32 AlliesInSlab, float DeltaSeconds);
+		int32 AlliesInDisc, float DeltaSeconds);
 
 	void LogShot(int32 GunIndex, const FVector& FirePos, int32 TargetId);
 	void LogPlayerShot(const FVector& FirePos);
@@ -78,7 +80,7 @@ struct FPlaytestRecorder
 	void LogAllyKilled(int32 GunIndex, const FVector& HitPoint);
 	void LogPlayerHit(int32 GunIndex, const FVector& HitPoint, bool bNoDamage, FName BoneName, bool bHeadshot);
 	void LogPlayerDeath(const FVector& DeathPos);
-	void LogTakeover(float DeathAnchorY, const FVector& TakeoverPosition, int32 LadderSteps);
+	void LogTakeover(const FVector& DeathAnchor, const FVector& TakeoverPosition, bool bManufactured, int32 DiscCandidates);
 	void LogStopStart(int32 GunIndex, EMGStop Stop, float DurationSeconds);
 	void LogStopEnd(int32 GunIndex, EMGStop Stop);
 	void LogTargetSwitch(int32 GunIndex, int32 FromId, int32 ToId);

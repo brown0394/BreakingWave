@@ -196,8 +196,8 @@ bool AMGBunkerManager::CanAcquirePlayer() const
 	return GetWorld()->GetTimeSeconds() >= PlayerAcquireBlockedUntil;
 }
 
-void AMGBunkerManager::NotifyPlayerTakeover(float BlockedUntilTime, float DeathAnchorY,
-	const FVector& TakeoverPosition, int32 LadderSteps)
+void AMGBunkerManager::NotifyPlayerTakeover(float BlockedUntilTime, const FVector& DeathAnchor,
+	const FVector& TakeoverPosition, bool bManufactured, int32 DiscCandidates)
 {
 	PlayerAcquireBlockedUntil = BlockedUntilTime;
 
@@ -211,7 +211,7 @@ void AMGBunkerManager::NotifyPlayerTakeover(float BlockedUntilTime, float DeathA
 		}
 	}
 
-	Recorder.LogTakeover(DeathAnchorY, TakeoverPosition, LadderSteps);
+	Recorder.LogTakeover(DeathAnchor, TakeoverPosition, bManufactured, DiscCandidates);
 }
 
 void AMGBunkerManager::Tick(float DeltaSeconds)
@@ -243,9 +243,9 @@ void AMGBunkerManager::Tick(float DeltaSeconds)
 		}
 	}
 	const ABreakingWaveCharacter* SampledPlayer = GetPlayerCharacter();
-	const int32 AlliesInSlab = (SampledPlayer != nullptr && AllySim.IsValid())
-		? AllySim->CountAlliesInSlab(SampledPlayer->GetActorLocation().Y) : 0;
-	Recorder.SamplePlayer(SampledPlayer, bPlayerTargeted, StoppedGunCount, AlliesInSlab, DeltaSeconds);
+	const int32 AlliesInDisc = (SampledPlayer != nullptr && AllySim.IsValid())
+		? AllySim->CountAlliesInDisc(SampledPlayer->GetActorLocation()) : 0;
+	Recorder.SamplePlayer(SampledPlayer, bPlayerTargeted, StoppedGunCount, AlliesInDisc, DeltaSeconds);
 
 	if (bDebug)
 	{
@@ -677,7 +677,7 @@ static int32 BulletShooterId(const FMGBullet& Bullet)
 	{
 	case EMGBulletSource::Gun: return Bullet.SourceIndex;
 	case EMGBulletSource::PlayerRifle: return Playtest::PlayerTargetId;
-	default: return 1000 + Bullet.SourceIndex;
+	default: return Playtest::InfantryShooterIdBase + Bullet.SourceIndex;
 	}
 }
 

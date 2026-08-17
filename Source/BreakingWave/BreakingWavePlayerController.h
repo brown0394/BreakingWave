@@ -150,8 +150,8 @@ private:
 
 	TSubclassOf<APawn> TakeoverPawnClass;
 
-	/** Stamped at the instant of death and never moved; the selection slab is measured from it */
-	float DeathAnchorY = 0.f;
+	/** Stamped at the instant of death and never moved; the takeover disc is measured from it */
+	FVector DeathAnchor = FVector::ZeroVector;
 
 	FVector DeathCameraStartLocation = FVector::ZeroVector;
 

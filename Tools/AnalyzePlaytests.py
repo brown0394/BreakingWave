@@ -29,6 +29,8 @@ except ImportError:
     HAVE_MPL = False
 
 ZONE_BOUNDARIES_Y = [-25400.0, -19400.0, -11400.0, -2400.0, 7600.0, 15600.0]
+# The shooter id in the gun column: MG bunkers are 0..n, infantry soldiers are offset above this
+INFANTRY_SHOOTER_ID_BASE = 1000
 ZONE_NAMES = ["Z0 landing", "Z1 waterline", "Z2 obstacles", "Z3 upper beach", "Z4 defense line"]
 BEACH_X_RANGE = (-51000.0, 51000.0)
 BEACH_Y_RANGE = (-27000.0, 17000.0)
@@ -158,9 +160,15 @@ def summarize_run(session, run_index, events):
     run["advance_m"] = (run["max_y"] - run["start_y"]) / 100.0
     run["start_zone"] = zone_at_y(run["start_y"])
     run["end_zone"] = zone_at_y(run["max_y"])
+    run["inf_shots_at"] = sum(
+        1 for e in active if e["event"] == "inf_shot" and e["extra"].get("tgt") == "-1")
+    run["inf_hits"] = sum(
+        1 for e in active if e["event"] == "hit_player" and e["gun"] >= INFANTRY_SHOOTER_ID_BASE)
     run["takeover"] = next(
         ({"given_back_m": float(e["extra"].get("given_back", "0")) / 100.0,
-          "ladder": int(e["extra"].get("ladder", "0")),
+          "made": int(e["extra"]["made"]) if "made" in e["extra"] else None,
+          "disc_allies": int(e["extra"]["disc_allies"]) if "disc_allies" in e["extra"] else None,
+          "dist_m": float(e["extra"]["dist"]) / 100.0 if "dist" in e["extra"] else None,
           "to": (e["x"], e["y"]),
           "from_y": float(e["extra"].get("death_y", "0"))}
          for e in events if e["event"] == "takeover"), None)
@@ -170,7 +178,7 @@ def summarize_run(session, run_index, events):
 def print_runs(all_runs):
     header = (f"{'session':<18}{'life':>5}{'status':>9}{'dur s':>8}{'from':>6}{'zone':>6}{'ground m':>10}"
               f"{'shots@':>8}{'hits':>6}{'hit %':>7}{'wnd':>5}{'hs':>4}{'cracks':>8}{'whizz':>7}{'fired':>7}"
-              f"{'infdn':>7}{'adv tgt':>9}{'adv clr':>9}{'back m':>8}{'ladr':>6}  splits")
+              f"{'infdn':>7}{'adv tgt':>9}{'adv clr':>9}{'back m':>8}{'made':>6}{'disc':>6}  splits")
     print(header)
     print("-" * len(header))
     for r in all_runs:
@@ -179,14 +187,15 @@ def print_runs(all_runs):
         tag = " [nodmg]" if r["nodmg"] else ""
         takeover = r.get("takeover")
         back = f"{takeover['given_back_m']:>8.0f}" if takeover else f"{'-':>8}"
-        ladder = f"{takeover['ladder']:>6}" if takeover else f"{'-':>6}"
+        made = f"{('y' if takeover['made'] else 'n'):>6}" if takeover and takeover["made"] is not None else f"{'-':>6}"
+        disc = f"{takeover['disc_allies']:>6}" if takeover and takeover["disc_allies"] is not None else f"{'-':>6}"
         print(
             f"{r['session']:<18}{r['run']:>5}{r['status']:>9}{r['duration']:>8.1f}"
             f"{r['start_zone']:>6}{r['end_zone']:>6}{r['advance_m']:>10.0f}"
             f"{r['shots_at']:>8}{r['hits']:>6}{hit_pct:>7.1f}{r.get('wounds', 0):>5}"
             f"{('y' if r.get('headshot') else ''):>4}{r['cracks']:>8}{r['whizzes']:>7}"
             f"{r['pshots']:>7}{r['inf_down']:>7}"
-            f"{r['adv_targeted_m']:>9.0f}{r['adv_clear_m']:>9.0f}{back}{ladder}  {splits}{tag}"
+            f"{r['adv_targeted_m']:>9.0f}{r['adv_clear_m']:>9.0f}{back}{made}{disc}  {splits}{tag}"
         )
 
 
@@ -198,7 +207,7 @@ def print_session_envelope(all_runs):
 
     print("\nSESSION ADVANCE ENVELOPE")
     header = (f"{'session':<18}{'lives':>7}{'takeovers':>11}{'first y':>9}{'best y':>9}"
-              f"{'net m':>8}{'back m':>8}{'ladder avg':>12}{'ladder max':>12}")
+              f"{'net m':>8}{'back m':>8}{'made %':>9}{'disc med':>10}")
     print(header)
     print("-" * len(header))
     for session, runs in sorted(by_session.items()):
@@ -206,17 +215,26 @@ def print_session_envelope(all_runs):
         first_y = min(r["start_y"] for r in runs)
         best_y = max(r["max_y"] for r in runs)
         back = sum(t["given_back_m"] for t in takeovers)
-        ladders = [t["ladder"] for t in takeovers]
-        ladder_avg = f"{statistics.mean(ladders):>12.2f}" if ladders else f"{'-':>12}"
-        ladder_max = f"{max(ladders):>12}" if ladders else f"{'-':>12}"
+        made = [t["made"] for t in takeovers if t["made"] is not None]
+        discs = [t["disc_allies"] for t in takeovers if t["disc_allies"] is not None]
+        made_pct = f"{100.0 * sum(made) / len(made):>9.0f}" if made else f"{'-':>9}"
+        disc_med = f"{statistics.median(discs):>10.1f}" if discs else f"{'-':>10}"
         print(f"{session:<18}{len(runs):>7}{len(takeovers):>11}{first_y:>9.0f}{best_y:>9.0f}"
-              f"{(best_y - first_y) / 100.0:>8.0f}{back:>8.0f}{ladder_avg}{ladder_max}")
+              f"{(best_y - first_y) / 100.0:>8.0f}{back:>8.0f}{made_pct}{disc_med}")
 
     all_takeovers = [r["takeover"] for r in all_runs if r.get("takeover")]
     if all_takeovers:
-        expanded = [t for t in all_takeovers if t["ladder"] > 0]
-        print(f"\nthe ±20 m slab held someone on {len(all_takeovers) - len(expanded)} of {len(all_takeovers)} takeovers; "
-              f"the ladder had to expand on {len(expanded)}")
+        made = [t["made"] for t in all_takeovers if t["made"] is not None]
+        if made:
+            print(f"\na real ally was inside the disc on {len(made) - sum(made)} of {len(made)} takeovers; "
+                  f"the other {sum(made)} were spawned at the fog edge")
+            dists = [t["dist_m"] for t in all_takeovers if t["dist_m"] is not None]
+            if dists:
+                print(f"distance to the man you became: median {statistics.median(dists):.0f}m  max {max(dists):.0f}m")
+        legacy = [t for t in all_takeovers if t["made"] is None]
+        if legacy:
+            print(f"\n{len(legacy)} takeovers predate Decision 041 (rear-expansion ladder); "
+                  f"their give-back is not comparable")
         print(f"give-back per takeover: median {statistics.median(t['given_back_m'] for t in all_takeovers):.0f}m  "
               f"max {max(t['given_back_m'] for t in all_takeovers):.0f}m")
 
@@ -237,7 +255,15 @@ def print_aggregates(all_runs):
         print("died in: " + "  ".join(f"{ZONE_NAMES[z]} x{n}" for z, n in sorted(zones.items())))
         shots = sum(r["shots_at"] for r in deaths)
         hits = sum(r["hits"] for r in deaths)
-        print(f"MG vs player: {shots} shots aimed, {hits} hits ({100.0 * hits / shots:.2f}%)" if shots else "MG vs player: no aimed shots")
+        inf_shots = sum(r["inf_shots_at"] for r in deaths)
+        inf_hits = sum(r["inf_hits"] for r in deaths)
+        mg_shots, mg_hits = shots - inf_shots, hits - inf_hits
+        print(f"MG vs player: {mg_shots} shots aimed, {mg_hits} hits ({100.0 * mg_hits / mg_shots:.2f}%)"
+              if mg_shots else "MG vs player: no aimed shots")
+        if inf_shots or inf_hits:
+            print(f"infantry vs player: {inf_shots} shots aimed, {inf_hits} hits "
+                  f"({100.0 * inf_hits / inf_shots:.2f}%)" if inf_shots else
+                  f"infantry vs player: no aimed shots, {inf_hits} hits")
         adv_t = sum(r["adv_targeted_m"] for r in deaths)
         adv_c = sum(r["adv_clear_m"] for r in deaths)
         total = adv_t + adv_c

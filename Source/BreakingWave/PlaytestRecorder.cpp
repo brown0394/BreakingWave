@@ -76,12 +76,12 @@ void FPlaytestRecorder::EndSession()
 		AppendEvent(TEXT("life_abort"), FVector(0.f, LastPlayerY, 0.f), -1, LifeSummaryExtra());
 	}
 
-	const float MeanLadderSteps = Session.Takeovers > 0
-		? static_cast<float>(Session.LadderStepsTotal) / Session.Takeovers : 0.f;
+	const float ManufacturedFraction = Session.Takeovers > 0
+		? static_cast<float>(Session.Manufactured) / Session.Takeovers : 0.f;
 	AppendEvent(TEXT("session_end"), FVector(0.f, Session.MaxY, 0.f), -1, FString::Printf(
-		TEXT("dur=%.1f;lives=%d;takeovers=%d;first_y=%.0f;max_y=%.0f;net_advance=%.0f;given_back=%.0f;ladder_mean=%.2f;ladder_max=%d"),
+		TEXT("dur=%.1f;lives=%d;takeovers=%d;first_y=%.0f;max_y=%.0f;net_advance=%.0f;given_back=%.0f;made=%d;made_frac=%.2f"),
 		Now() - Session.StartTime, Session.Lives, Session.Takeovers, Session.FirstY, Session.MaxY,
-		Session.MaxY - Session.FirstY, Session.GivenBackCm, MeanLadderSteps, Session.LadderStepsMax));
+		Session.MaxY - Session.FirstY, Session.GivenBackCm, Session.Manufactured, ManufacturedFraction));
 
 	FlushToDisk();
 	bSessionActive = false;
@@ -89,7 +89,7 @@ void FPlaytestRecorder::EndSession()
 }
 
 void FPlaytestRecorder::SamplePlayer(const ABreakingWaveCharacter* Player, bool bTargetedByLiveGun, int32 StoppedGunCount,
-	int32 AlliesInSlab, float DeltaSeconds)
+	int32 AlliesInDisc, float DeltaSeconds)
 {
 	if (!bSessionActive || Player == nullptr)
 	{
@@ -137,9 +137,9 @@ void FPlaytestRecorder::SamplePlayer(const ABreakingWaveCharacter* Player, bool 
 			Player->IsSliding() ? TEXT("slide") :
 			Player->GetCharacterMovement()->IsFalling() ? TEXT("air") : TEXT("foot");
 		AppendEvent(TEXT("sample"), Pos, -1, FString::Printf(
-			TEXT("stance=%s;speed=%.0f;targeted=%d;stopped=%d;wounds=%d;slab_allies=%d"),
+			TEXT("stance=%s;speed=%.0f;targeted=%d;stopped=%d;wounds=%d;disc_allies=%d"),
 			Stance, Player->GetVelocity().Size2D(), bTargetedByLiveGun ? 1 : 0, StoppedGunCount,
-			Life.Wounds, AlliesInSlab));
+			Life.Wounds, AlliesInDisc));
 	}
 
 	FlushTimer += DeltaSeconds;
@@ -182,7 +182,8 @@ void FPlaytestRecorder::LogInfantryShot(int32 SoldierIndex, const FVector& FireP
 			++Life.ShotsAtPlayer;
 		}
 	}
-	AppendEvent(TEXT("inf_shot"), FirePos, 1000 + SoldierIndex, FString::Printf(TEXT("tgt=%d"), TargetId));
+	AppendEvent(TEXT("inf_shot"), FirePos, Playtest::InfantryShooterIdBase + SoldierIndex,
+		FString::Printf(TEXT("tgt=%d"), TargetId));
 }
 
 void FPlaytestRecorder::LogInfantryDown(int32 SoldierIndex, const FVector& HitPoint)
@@ -191,7 +192,7 @@ void FPlaytestRecorder::LogInfantryDown(int32 SoldierIndex, const FVector& HitPo
 	{
 		++Life.InfantryDowned;
 	}
-	AppendEvent(TEXT("inf_down"), HitPoint, 1000 + SoldierIndex, FString());
+	AppendEvent(TEXT("inf_down"), HitPoint, Playtest::InfantryShooterIdBase + SoldierIndex, FString());
 }
 
 void FPlaytestRecorder::LogImpact(int32 GunIndex, const FVector& HitPoint)
@@ -253,16 +254,17 @@ void FPlaytestRecorder::LogPlayerDeath(const FVector& DeathPos)
 	bLifeActive = false;
 }
 
-void FPlaytestRecorder::LogTakeover(float DeathAnchorY, const FVector& TakeoverPosition, int32 LadderSteps)
+void FPlaytestRecorder::LogTakeover(const FVector& DeathAnchor, const FVector& TakeoverPosition,
+	bool bManufactured, int32 DiscCandidates)
 {
 	++Session.Takeovers;
-	Session.LadderStepsTotal += LadderSteps;
-	Session.LadderStepsMax = FMath::Max(Session.LadderStepsMax, LadderSteps);
-	Session.GivenBackCm += FMath::Max(0.f, DeathAnchorY - static_cast<float>(TakeoverPosition.Y));
+	Session.Manufactured += bManufactured ? 1 : 0;
+	Session.GivenBackCm += FMath::Max(0.f, static_cast<float>(DeathAnchor.Y - TakeoverPosition.Y));
 
 	AppendEvent(TEXT("takeover"), TakeoverPosition, -1, FString::Printf(
-		TEXT("death_y=%.0f;given_back=%.0f;ladder=%d"),
-		DeathAnchorY, DeathAnchorY - TakeoverPosition.Y, LadderSteps));
+		TEXT("death_y=%.0f;given_back=%.0f;made=%d;disc_allies=%d;dist=%.0f"),
+		DeathAnchor.Y, DeathAnchor.Y - TakeoverPosition.Y, bManufactured ? 1 : 0, DiscCandidates,
+		FVector::Dist2D(DeathAnchor, TakeoverPosition)));
 }
 
 void FPlaytestRecorder::LogStopStart(int32 GunIndex, EMGStop Stop, float DurationSeconds)

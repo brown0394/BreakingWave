@@ -116,7 +116,7 @@ void ABreakingWavePlayerController::BeginDeathTransition()
 	}
 
 	TakeoverPawnClass = Dying->GetClass();
-	DeathAnchorY = Dying->GetActorLocation().Y;
+	DeathAnchor = Dying->GetActorLocation();
 
 	const UCameraComponent* Camera = Dying->GetFirstPersonCameraComponent();
 	DeathCameraStartLocation = Camera->GetComponentLocation();
@@ -218,10 +218,18 @@ bool ABreakingWavePlayerController::TryTakeover()
 		return false;
 	}
 
-	int32 LadderSteps = 0;
-	const int32 Slot = AllySim->SelectTakeoverSlot(DeathAnchorY, LadderSteps);
+	bool bManufactured = false;
+	int32 DiscCandidates = 0;
+	const int32 Slot = AllySim->AcquireTakeoverAlly(DeathAnchor, bManufactured, DiscCandidates);
 	if (Slot == INDEX_NONE)
 	{
+		if (!bTakeoverBlockedWarned)
+		{
+			bTakeoverBlockedWarned = true;
+			UE_LOG(LogBreakingWave, Error,
+				TEXT("Takeover found no valid ground at any radius around %s — the screen will stay black. ")
+				TEXT("This should be unreachable; the death point is inside geometry."), *DeathAnchor.ToString());
+		}
 		return false;
 	}
 
@@ -264,7 +272,7 @@ bool ABreakingWavePlayerController::TryTakeover()
 		+ TransitionSettings.FadeInSeconds + TransitionSettings.TargetingDelaySeconds;
 	for (TActorIterator<AMGBunkerManager> It(GetWorld()); It; ++It)
 	{
-		It->NotifyPlayerTakeover(BlockedUntil, DeathAnchorY, GroundPosition, LadderSteps);
+		It->NotifyPlayerTakeover(BlockedUntil, DeathAnchor, GroundPosition, bManufactured, DiscCandidates);
 	}
 	for (TActorIterator<AInfantryManager> It(GetWorld()); It; ++It)
 	{

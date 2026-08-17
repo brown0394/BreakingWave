@@ -253,8 +253,14 @@ Data-oriented per Decision 021: one ally NPC system ticks an array of NPC state 
 ## Open Questions
 
 - [ ] Finalize type ratios (current 30/35/15/20 is tentative)
-- [ ] Finalize fog visibility distance (30m? 40m?)
-- [ ] Active NPC count cap — decide after profiling
+- [ ] Finalize fog visibility distance (30m? 40m?) — **now load-bearing beyond fog itself**:
+  Decision 041 ties `FAllySimSettings.TakeoverRadius` (currently 3500 uu, the midpoint of
+  the range above) to this number, because the man you take over must be one you could have
+  seen. Update the knob when this settles
+- [ ] Active NPC count cap — decide after profiling. `MaxAlive` is 128 as of Decision 041
+  (raised from a Step 3 placeholder of 32, which delivered ~1 nearby against the 8–12 in
+  §118). The per-zone curve below and fog-edge top-up spawning are deferred to the
+  rendered-ally pass
 - [ ] Corpse count cap — decide after profiling
 - [ ] Ammo spawn probability value — tune through testing
 - [ ] Wounded NPC voice lines and count

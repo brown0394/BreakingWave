@@ -440,7 +440,8 @@ public:
 	/** Every gun forgets the man who just died and cannot acquire the new one until BlockedUntilTime
 	    (07_CAMERA.md §4). Awareness lockout rather than a scoring ban, so the normal perception ramp
 	    still has to run when the window closes instead of three guns snapping on at once. */
-	void NotifyPlayerTakeover(float BlockedUntilTime, float DeathAnchorY, const FVector& TakeoverPosition, int32 LadderSteps);
+	void NotifyPlayerTakeover(float BlockedUntilTime, const FVector& DeathAnchor, const FVector& TakeoverPosition,
+		bool bManufactured, int32 DiscCandidates);
 
 protected:
 	virtual void BeginPlay() override;

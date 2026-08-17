@@ -103,14 +103,51 @@ void AAllySimManager::SpawnAlly()
 	}
 	Position.Z = GroundZ;
 
-	Slot->Position = Position;
-	Slot->HeadingYaw = 90.f + FMath::FRandRange(-Settings.WanderYawRange, Settings.WanderYawRange);
-	Slot->Speed = FMath::FRandRange(Settings.AdvanceSpeedMin, Settings.AdvanceSpeedMax);
-	Slot->Stance = ESimAllyStance::Advancing;
-	Slot->StanceTimer = 0.f;
-	Slot->WanderTimer = FMath::FRandRange(Settings.WanderIntervalMin, Settings.WanderIntervalMax);
-	Slot->bAlive = true;
-	Slot->Generation++;
+	InitialiseAlly(*Slot, Position, false);
+}
+
+int32 AAllySimManager::SpawnAllyAt(const FVector& GroundPosition, const FVector& EvictionAnchor)
+{
+	const int32 Slot = FindReusableSlot(EvictionAnchor);
+	if (Slot == INDEX_NONE)
+	{
+		return INDEX_NONE;
+	}
+
+	InitialiseAlly(Allies[Slot], GroundPosition, FMath::FRand() < Settings.PronePauseChance);
+	return Slot;
+}
+
+void AAllySimManager::InitialiseAlly(FSimAlly& Slot, const FVector& GroundPosition, bool bStartProne)
+{
+	Slot.Position = GroundPosition;
+	Slot.HeadingYaw = 90.f + FMath::FRandRange(-Settings.WanderYawRange, Settings.WanderYawRange);
+	Slot.Speed = FMath::FRandRange(Settings.AdvanceSpeedMin, Settings.AdvanceSpeedMax);
+	Slot.Stance = bStartProne ? ESimAllyStance::Prone : ESimAllyStance::Advancing;
+	Slot.StanceTimer = bStartProne ? FMath::FRandRange(Settings.PronePauseMin, Settings.PronePauseMax) : 0.f;
+	Slot.WanderTimer = FMath::FRandRange(Settings.WanderIntervalMin, Settings.WanderIntervalMax);
+	Slot.bAlive = true;
+	Slot.Generation++;
+}
+
+int32 AAllySimManager::FindReusableSlot(const FVector& EvictionAnchor) const
+{
+	int32 Furthest = INDEX_NONE;
+	float FurthestDistanceSquared = -1.f;
+	for (int32 Index = 0; Index < Allies.Num(); ++Index)
+	{
+		if (!Allies[Index].bAlive)
+		{
+			return Index;
+		}
+		const float DistanceSquared = FVector::DistSquared2D(Allies[Index].Position, EvictionAnchor);
+		if (DistanceSquared > FurthestDistanceSquared)
+		{
+			FurthestDistanceSquared = DistanceSquared;
+			Furthest = Index;
+		}
+	}
+	return Furthest;
 }
 
 void AAllySimManager::AdvanceAlly(FSimAlly& Ally, float DeltaSeconds)
@@ -183,53 +220,78 @@ void AAllySimManager::KillAlly(int32 Index)
 	}
 }
 
-int32 AAllySimManager::SelectTakeoverSlot(float AnchorY, int32& OutLadderSteps) const
+int32 AAllySimManager::AcquireTakeoverAlly(const FVector& DeathPoint, bool& bOutManufactured, int32& OutDiscCandidates)
 {
-	const float ForwardEdge = AnchorY + Settings.TakeoverForwardReach;
+	bOutManufactured = false;
 
-	float RearLimit = ForwardEdge;
-	for (const FVector& Spawn : SpawnPoints)
+	const float ForwardEdge = DeathPoint.Y + Settings.TakeoverForwardReach;
+	const float RadiusSquared = FMath::Square(Settings.TakeoverRadius);
+
+	TArray<int32, TInlineAllocator<16>> Candidates;
+	for (int32 Index = 0; Index < Allies.Num(); ++Index)
 	{
-		RearLimit = FMath::Min(RearLimit, static_cast<float>(Spawn.Y));
+		const FSimAlly& Ally = Allies[Index];
+		if (Ally.bAlive && Ally.Position.Y <= ForwardEdge
+			&& FVector::DistSquared2D(Ally.Position, DeathPoint) <= RadiusSquared)
+		{
+			Candidates.Add(Index);
+		}
 	}
-	RearLimit -= Settings.SpawnLateralSpread;
 
-	TArray<int32, TInlineAllocator<32>> Candidates;
-	OutLadderSteps = 0;
-
-	for (;;)
+	OutDiscCandidates = Candidates.Num();
+	if (Candidates.Num() > 0)
 	{
-		const float RearEdge = AnchorY - Settings.TakeoverForwardReach - OutLadderSteps * Settings.TakeoverRearStep;
-
-		Candidates.Reset();
-		for (int32 Index = 0; Index < Allies.Num(); ++Index)
-		{
-			const FSimAlly& Ally = Allies[Index];
-			if (Ally.bAlive && Ally.Position.Y >= RearEdge && Ally.Position.Y <= ForwardEdge)
-			{
-				Candidates.Add(Index);
-			}
-		}
-
-		if (Candidates.Num() > 0)
-		{
-			return Candidates[FMath::RandRange(0, Candidates.Num() - 1)];
-		}
-
-		if (RearEdge <= RearLimit)
-		{
-			return INDEX_NONE;
-		}
-		++OutLadderSteps;
+		return Candidates[FMath::RandRange(0, Candidates.Num() - 1)];
 	}
+
+	bOutManufactured = true;
+	return ManufactureTakeoverAlly(DeathPoint);
 }
 
-int32 AAllySimManager::CountAlliesInSlab(float AnchorY) const
+int32 AAllySimManager::ManufactureTakeoverAlly(const FVector& DeathPoint)
 {
+	const float ForwardEdge = DeathPoint.Y + Settings.TakeoverForwardReach;
+	float Radius = Settings.TakeoverRadius;
+
+	float AnchorGroundZ;
+	const bool bHaveAnchorGround = TraceGroundZ(DeathPoint, AnchorGroundZ);
+
+	for (int32 Growth = 0; Growth <= Settings.TakeoverRadiusGrowthSteps; ++Growth)
+	{
+		for (int32 Attempt = 0; Attempt < Settings.TakeoverPlacementAttempts; ++Attempt)
+		{
+			const float Angle = FMath::FRandRange(0.f, UE_TWO_PI);
+			FVector Position = DeathPoint
+				+ FVector(FMath::Cos(Angle) * Radius, FMath::Sin(Angle) * Radius, 0.f);
+			Position.Y = FMath::Min(Position.Y, ForwardEdge);
+
+			float GroundZ;
+			if (!TraceGroundZ(Position, GroundZ))
+			{
+				continue;
+			}
+			if (bHaveAnchorGround
+				&& FMath::Abs(GroundZ - AnchorGroundZ) > Settings.TakeoverMaxGroundStep)
+			{
+				continue;
+			}
+			Position.Z = GroundZ;
+
+			return SpawnAllyAt(Position, DeathPoint);
+		}
+		Radius *= Settings.TakeoverRadiusGrowthFactor;
+	}
+
+	return INDEX_NONE;
+}
+
+int32 AAllySimManager::CountAlliesInDisc(const FVector& Anchor) const
+{
+	const float RadiusSquared = FMath::Square(Settings.TakeoverRadius);
 	int32 Count = 0;
 	for (const FSimAlly& Ally : Allies)
 	{
-		if (Ally.bAlive && FMath::Abs(Ally.Position.Y - AnchorY) <= Settings.TakeoverForwardReach)
+		if (Ally.bAlive && FVector::DistSquared2D(Ally.Position, Anchor) <= RadiusSquared)
 		{
 			++Count;
 		}

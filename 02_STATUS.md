@@ -1,18 +1,25 @@
 # Current Status
 
-> Last updated: 2026-08-16
+> Last updated: 2026-08-17
 >
 > This document holds the CURRENT state and what's next — nothing else. Session history
 > lives in git log; the why of past choices lives in 03_DECISIONS.md; engine gotchas live
 > in 11_ENGINE_NOTES.md. When updating, replace stale facts instead of appending below them.
 
-## Phase: Steps 4+5 mechanical loop BUILT, and FIRST SEEN RUNNING 2026-08-17 — user's read: "things look good". The whole spec is settled (Decisions 038 complete, 039, 040)
+## Phase: Steps 4+5 loop FEEL-CHECKED AND PASSED 2026-08-17, and the beach was crossed for the first time. First life/session telemetry batch analyzed — one real defect found (lateral takeover jump)
 
-The death → takeover loop exists and closes: two-shot damage on mesh-resolved hits, death
-camera, fade, ally selection, new pawn, targeting delay, corpses, restructured telemetry.
-First PIE pass 2026-08-17 turned up one flaw — the corpse ragdoll flew too far and too
-light (fixed same day, see the corpse weight pass below). The rest of the feel-check list
-below is still unanswered, and the rifle + Z3 infantry firefight are only now reachable.
+The death → takeover loop exists, closes, and was feel-checked green on every question on
+the list: corpse weight, two-shot tell, the ~3.5 s leash, mid-stride and prone handover,
+prone exposure, and the rifle + Z3 infantry pass. The ratchet works — a session is now one
+continuous push instead of 24 resets to the craft, and the player reached the bunker line
+and beyond (714 m) for the first time in the project's history.
+
+The batch analysis turned up one real defect — **takeover threw the player a median 260 m
+sideways** (max 541 m) because the rule constrained Y and not X. That was grilled through
+16 questions and **fixed the same day (Decision 041, compiled clean, NOT yet run)**: the
+selection slab is now a fog-radius disc, the rear-expansion ladder is gone, an empty disc
+manufactures a man at the fog edge, and `MaxAlive` went 32 → 128 because ally starvation
+turned out to be the root cause.
 
 The bare-respawn scaffolding is GONE (`PlayerSpawnTransform` deleted). `MGNoDamage`
 remains for observation; silence itself still signals MG stops (per-type stop sounds wait
@@ -132,6 +139,14 @@ more system work (user decision 2026-07-04) — pick them up before tuning zone 
   ally structs — spawn near craft, advance w/ wander, random prone pauses, die to MG fire,
   slot reuse w/ generation counter. Struct shaped for the later full 09_ALLY_NPC.md
   behavior; visual shells come in the ally step. Knobs in FAllySimSettings.
+  **`MaxAlive` 32 → 128 on 2026-08-17 (Decision 041, NOT yet run)**: 32 was a Step 3
+  placeholder that left a median of ONE live ally in a band spanning the whole beach width,
+  against `09_ALLY_NPC.md` §118's spec of 8–12 within visible range — the root cause of the
+  260 m lateral takeover jump. The per-zone density curve and fog-edge top-up spawning stay
+  deferred to the rendered-ally pass. Watch the frame cost: `AdvanceAlly` is one ground
+  trace per ally per tick and `EvaluatePerception` runs per gun over the whole array (cheap
+  early-outs first, then 3 exposure traces), so this is ~4× the perception work. If it
+  bites, slice perception across ticks rather than shrinking the wave.
   Pre-warm added 2026-08-02: BeginPlay simulates PreWarmSeconds (60) of assault before
   play, so the player lands mid-wave — fixes the first-session spawn-lock, where an empty
   beach made the player the only target and all three guns killed them at the craft in
@@ -194,7 +209,8 @@ more system work (user decision 2026-07-04) — pick them up before tuning zone 
   RifleDryClick/RifleReload synthesized + imported via Tools/GenerateRifleAudio.py
   (headless OK, disk-verified); character and infantry manager BeginPlay-fallback-load
   them, no BP wiring needed
-- [x] **Death → takeover loop (Decisions 038–040, built 2026-08-16, NOT play-tested).**
+- [x] **Death → takeover loop (Decisions 038–040, built 2026-08-16, FEEL-CHECKED PASSED
+  2026-08-17 — one defect open, the lateral takeover jump; see Next Steps).**
   Lives on `ABreakingWavePlayerController` as a phase machine ticked in `PlayerTick`:
   DeathShake (0.3 s) → DeathDescend (1.2 s) → DeathHold (0.5 s) → FadeOut (0.5 s) →
   [narrative screen, currently zero duration] → takeover → FadeIn (1.25 s) → control.
@@ -204,12 +220,18 @@ more system work (user decision 2026-07-04) — pick them up before tuning zone 
     above a downward-traced floor, roll to `TiltDegrees` (22°) on the side the round was
     travelling. Fade uses `StartCameraFade` with `bFadeAudio` — the audio fade the spec
     wanted, for one bool, no submix work
-  - Selection: `AAllySimManager::SelectTakeoverSlot` — forward edge pinned at
-    anchor + `TakeoverForwardReach` (2000 uu), rear edge stepping back by
-    `TakeoverRearStep` until the slab holds someone, random among them, ladder-step count
-    returned for telemetry. Runs at the END of the fade, so the man is alive when taken.
-    Returns INDEX_NONE only if nobody is alive anywhere; the machine then holds on black
-    and re-searches each tick (never a bare respawn)
+  - Selection **reworked 2026-08-17 (Decision 041, NOT yet run)**:
+    `AAllySimManager::AcquireTakeoverAlly` takes a 2D death anchor and returns a live ally
+    inside a disc of `TakeoverRadius` (3500 uu ≈ 35 m, **must track fog visibility**), no
+    candidate further forward than `TakeoverForwardReach` (+20 m), random among them. Empty
+    disc → `ManufactureTakeoverAlly` spawns a normal `FSimAlly` at a random angle on the
+    disc edge (Y-clamped forward), which nobody can see happen (`09_ALLY_NPC.md` §119).
+    Guarantees: 8 angle retries → disc grows ×1.5 for 3 steps → no free slot evicts the live
+    ally furthest from the anchor. A placement counts as valid only if its ground is within
+    `TakeoverMaxGroundStep` (300 uu) of the ground you died on, or the downward trace will
+    put a man on a bunker roof. Never on your own corpse; the unreachable total failure
+    holds on black and logs an Error. Still runs at the END of the fade, so the man is alive
+    when taken. **The rear-expansion ladder and `TakeoverRearStep` are deleted.**
   - A NEW PAWN is spawned and possessed per life. The old one becomes a ragdoll corpse
     (`BecomeCorpse`), capped by `MaxCorpses` (8, EditAnywhere), oldest retired first;
     ragdoll ignores ECC_Pawn so corpses can't wall you in. **Corpse weight pass 2026-08-17**
@@ -229,8 +251,9 @@ more system work (user decision 2026-07-04) — pick them up before tuning zone 
     (~2.75 s total, ~1.5 s of it after control). MGs: awareness zeroed and accrual blocked
     (`CanAcquirePlayer`), so they forget the spot and must re-acquire through the normal
     perception ramp. Infantry: flat exclusion via `IsTargetAlive`. Bullets in flight stay live
-- [x] **Two-shot damage + mesh-authoritative hits (Decision 039, built 2026-08-16, NOT
-  play-tested)**: head bone = instant death, everything else wounds, second wound kills
+- [x] **Two-shot damage + mesh-authoritative hits (Decision 039, built 2026-08-16,
+  FEEL-CHECKED PASSED 2026-08-17)**: head bone = instant death, everything else wounds,
+  second wound kills
   (`WoundsToKill`). `ABreakingWaveCharacter::TraceBody` does a mesh-bounds broadphase then
   `LineTraceComponent` against the physics asset; `HeadBones` (default `head`) classifies.
   The capsule is no longer a combat volume — **prone is now a real 180 cm body on the
@@ -256,12 +279,16 @@ more system work (user decision 2026-07-04) — pick them up before tuning zone 
   death chains into a takeover instead of resetting to the craft:
   - CSV column and events renamed `run`→`life` (`life_start` / `life_abort`); life summary
     gained `starty`, `ground`, `wounds`, `head`
-  - New `takeover` event: death Y, chosen ally X/Y, and **ladder steps** — the direct
-    measure of whether Decision 038's ±20 m slab is thick enough at depth
+  - New `takeover` event: death Y, chosen ally X/Y, and — **reworked 2026-08-17 for
+    Decision 041** — `made` (was a man manufactured?), `disc_allies` (real candidates the
+    disc held) and `dist` (metres to the man you became). The `ladder` column is gone with
+    the ladder; `given_back` stays and remains comparable
   - New `session_end` event: lives, takeovers, first/best Y, net advance, total give-back,
-    mean/max ladder — the ratchet question in one row
-  - 2 Hz sample gained `wounds` and `slab_allies` (live allies inside the selection slab
-    around the player's current Y)
+    and (2026-08-17) `made`/`made_frac` in place of the ladder means — the ratchet question
+    and the density question in one row
+  - 2 Hz sample gained `wounds` and (2026-08-17) `disc_allies`, live allies inside a
+    takeover disc around the player's current position — replaces `slab_allies`, which
+    stopped meaning anything when the slab did
   - `hit_player` gained `bone` and `head`
   - `FInfantrySettings` now in the settings snapshot, so infantry tuning is attributable
   - All three 2026-08-11 known gaps are closed by the above
@@ -353,33 +380,63 @@ more system work (user decision 2026-07-04) — pick them up before tuning zone 
 - [x] ~~Pre-flight: run `Tools/GeneratePlayerPainAudio.py`~~ — DONE 2026-08-17,
   `Content/Audio/PlayerPain.uasset` disk-verified. **Pre-flight is now clear; PIE is
   unblocked**
-- [ ] **RESUME HERE — the feel-check, continued.** In order:
-  - [x] ~~**Does the loop close at all?**~~ YES — first PIE 2026-08-17, user read "things
-    look good". Neither known failure mode appeared (no infinite black screen, and the
-    player was hittable, so the mesh trace is finding bodies). The one flaw seen was the
-    corpse ragdoll's flight, fixed the same day
-  - **Does two-shot read?** You should be able to tell a survived hit from a miss on the
-    shake and grunt alone. If not, the tell is too weak and the persistent presentation
-    stops being deferrable
-  - **Is ~3.5 s death-to-control the right leash** when it fires every 30–60 s? The hold
-    (0.5 s) is the cheapest half-second to give back
-  - **Does the mid-stride handover feel like waking up or like losing the controls?**
-    Same question for taking over a PRONE man — you start pinned and must stand to move
-  - **Prone is now genuinely exposed** (mesh hits, not the 80 cm capsule). Check whether
-    it still reads as worth doing at all
-  - **Then the rifle + Z3 infantry feel-check, finally reachable**: rung-1 fire-drawing,
-    bolt-clack window tell, flinch suppression, ragdoll, seam-lane ownership, the
-    same-spot re-emerge pre-aim exploit. FP arm montages on "DefaultSlot" are still
-    UNVERIFIED — if the arms don't animate, that's why; the rifle still works
-- [ ] **Then `AnalyzePlaytests.bat`** — first batch with the life/session split. The
-  numbers to read first: `ladder` per takeover (is the ±20 m slab thick enough at depth,
-  or is it walking back 60 m every time?), `back m` totals, and the session envelope's
-  net advance versus give-back. `slab_allies` in the 2 Hz samples says whether density,
-  not the rule, is the constraint
+- [x] ~~**The feel-check**~~ — DONE 2026-08-17, ALL PASSED: loop closes, two-shot reads,
+  the ~3.5 s leash is right, mid-stride and prone handover both read as waking up, prone
+  still worth doing, and the rifle + Z3 infantry pass is good. Neither known failure mode
+  appeared (no infinite black screen; the player is hittable, so the mesh trace finds bodies)
+- [x] ~~**`AnalyzePlaytests.bat`**~~ — DONE 2026-08-17, first life/session batch (3 sessions,
+  26 lives, 23 takeovers). Findings in What Was Done below
+- [x] ~~**DECIDE FIRST — the lateral takeover jump**~~ — grilled and BUILT 2026-08-17
+  (Decision 041, compiles clean). Fog-radius disc for both search and spawn, ladder deleted,
+  manufacture-at-the-fog-edge fallback, `MaxAlive` 32 → 128, telemetry reworked
+- [ ] **RESUME HERE — PIE the new takeover rule.** It has not run once. What to watch:
+  - **Does the handover still read as waking up** when the man is always within 35 m —
+    and can you tell a manufactured man from a real one? You should not be able to
+  - **Density at 128.** The beach should feel more populated everywhere; watch for a frame
+    cost (3 guns × allies in arc × 3 exposure traces). If it bites, slice perception across
+    ticks — do NOT shrink the wave back
+  - **Watch the log for the two Errors**: "no valid ground at any radius" (unreachable by
+    design — if it fires, the death point is inside geometry) and Decision 039's
+    "no usable physics bodies"
+  - **The prone start now comes from the manufacture path too** (`SpawnAllyAt` rolls
+    `PronePauseChance`), so waking prone should be roughly as common as before, not rarer
+- [ ] **Then `AnalyzePlaytests.bat` again** — the first batch that can answer Decision 041's
+  own question. Read `made %` in the session envelope first (what fraction of takeovers had
+  to manufacture a man — if it is near zero, 128 was enough; if it is high, the fog-edge
+  top-up is unavoidable), then `disc med` and the 2 Hz `disc_allies`, then whether `back m`
+  really fell to near zero
 - [ ] **Then, in one batch**: tune PlayerTargetScoreMultiplier (MG) +
   FInfantrySettings.PlayerTargetScoreMultiplier + infantry knobs together — both coded,
-  both untuned (Decision 035). Step 3 checklist questions (hit frequency, crater
-  survival, stop windows) stay open until being targeted is routine
+  both untuned (Decision 035). The batch now has direction:
+  - **MG player-priority is done overshooting and can probably come down.** Advance while
+    targeted is 34–37% per session (was 7% for three straight batches). 2,156 rounds came
+    at the player in 26 lives
+  - **Infantry volume, not accuracy, is the knob.** Infantry hit the player 5 times on 17
+    shots — a **29% hit rate against the MGs' 2.2%** — but fired only 131 rounds total,
+    13% of them at the player, i.e. one shot per soldier per ~19 s. Raise rate (cycle
+    wait) and PlayerTargetScoreMultiplier; do NOT touch their dispersion
+  - Step 3 checklist questions (hit frequency, crater survival, stop windows) stay open
+- [ ] **The wounded state does not exist in play** — median 0.40 s between the wound and the
+  killing round, 16 of 21 non-headshot deaths inside 1 s, because MG fire arrives in bursts
+  and the second round is in the same burst. This is a **do-not-build-yet signal for the
+  deferred wounded presentation** (vignette, blur, aim sway, speed drop): at 0.4 s it would
+  never be seen. If a wounded *phase* is wanted, the lever is MG burst discipline (pause or
+  switch after a hit registers), not `WoundsToKill`. Two-shot's real contribution this batch
+  was different and valuable: it absorbed the in-flight-round artifact — two takeovers were
+  hit 0.31 s and 0.60 s after handover by the previous life's bullets and SURVIVED, where
+  the same event caused the 2026-08-11 respawn death spiral
+- [ ] **Six rifle rounds silence a bunker permanently, and the garrison's depth never gets
+  to matter.** Measured: 7 rounds at 617 m killed all 6 crew of gun 2 in 2.4 s (one kill per
+  round, `remain` 5→0), and the life that followed was the longest of the batch (35.4 s).
+  `TakeoverDuration` is 3–6 s, so each replacement is killed while still taking over, well
+  inside his own stop; `CrewAlive` 0 is permanent, with no reinforcement path. This is
+  currently the whole answer to "how do you break the bunker line" — decide whether it is
+  THE answer before building Z4 infantry and the comm-trench breakthrough
+- [ ] **The far side of the defense line is empty.** The ratchet now delivers the player past
+  the bunkers (max reach 714 m, 80 m past the line) because sim allies keep walking to
+  ~660 m and takeover follows them forward. Session A's last life ran 15 s up there with
+  zero rounds fired at it. Bounding the ally advance (or building what is behind the line)
+  is now gameplay-visible, not cosmetic
 - Debug aids: **F7** = MG + ally + infantry readout; `MGNoDamage` observe mode (taints
   the life for combat stats), `MGKillCrew` = takeover windows
 - Greybox caveats: tracers converge on invisible sim allies (fog + rendered allies fix
@@ -392,6 +449,11 @@ more system work (user decision 2026-07-04) — pick them up before tuning zone 
 - **Telemetry comparability broke again** at 2026-08-16: two-shot damage and mesh hit
   volumes mean lethality, hit rate and prone exposure are all on new footing. Sessions
   before this date are not comparable for anything combat-related
+- **And again at 2026-08-17 (fourth break), for takeover only**: `ladder` and `slab_allies`
+  are dead columns, and `MaxAlive` 32 → 128 changes ally density everywhere. The three
+  2026-08-17 sessions stay readable (the analyzer prints `-` and says how many takeovers
+  predate Decision 041) but their takeover and give-back numbers are not comparable to what
+  comes next. Combat figures from 08-16 onward are still comparable
 
 ### Writing backlog
 - [ ] Second character ("the one who shook me") narrative writing
@@ -427,7 +489,57 @@ so world = profile-meters × 100 − 50400 on both axes. Profile coords below wi
 - Landing craft (Zone 0, ramp faces +Y inland): A-left 230/270 (−27400, −23400), B-center 510/270 (600, −23400), C-right 790/270 (28600, −23400)
 - Bunkers (Zone 4, slit faces −Y sea): MG-left 200/620 (−30400, 11600), MG-center 510/635 (600, 13100), MG-right 800/620 (29600, 11600)
 
-## What Was Done (last session — 2026-08-16)
+## What Was Done (last session — 2026-08-17)
+
+Feel-check completed (all green, see Next Steps) and the **first life/session telemetry
+batch** analyzed: `session_20260817_155711` / `_155901` / `_160746` — 26 lives, 23
+takeovers, 324 s of play. The corpse weight pass and the pain grunt shipped earlier the
+same day.
+
+- **The ratchet works, and the beach got crossed.** Net advance +448 / +331 / +346 m per
+  session; deepest reach **714 m** (past the bunker line), against a previous all-time best
+  of 437 m under bare respawn. Session 2's fifteen lives climbed 272 → 603 m and then
+  **stalled in a 90 m band at the defense line for eight consecutive lives** — the push
+  breaking on the strongpoint, which is the shape the design wants
+- **Decision 038's rule verified end-to-end from telemetry**: `ally_y = death_y −
+  given_back`; ladder bands land exactly on 20 / 40 / 60–80 m. The ±20 m slab held someone
+  on **17 of 23** takeovers; median give-back **9 m**; 8 takeovers were net *forward*. The
+  6 expansions all cost 66–78 m. **Y is solved. X is not** — see Next Steps
+- **Two-shot damage confirmed working and reframed.** 4 headshots in 25 deaths (16%); every
+  other death took exactly two wounds. But the median gap between wound and death is
+  **0.40 s** — the wounded state is a transition, not a phase
+- **Mesh-authoritative hits confirmed by the bone log**: 48 hits across 19 distinct bones —
+  pelvis 7, lowerarm_l 6, spine_05 6, calf_l 4, head 4, down to hand_l and foot_r.
+  **38% of all wounds are hand / foot / forearm / calf**, each worth exactly as much as a
+  spine hit (Decision 039, no limb tier — recorded here as an observation, not a re-open)
+- **Transition is now a third of the session.** Death → pawn spawn measures 2.50 s
+  (0.3 + 1.2 + 0.5 + 0.5, exactly as specced) plus the 1.25 s locked fade-in = **3.75 s to
+  control**. Session 2: 14 takeovers × 3.75 s = 52 s of a 149 s session (**35%** with no
+  control) against a **median life of 4.9 s** — you spend nearly as long dead as alive. The
+  leash feel-checked fine, so the lever, if any is wanted, is longer lives not shorter fades
+- **The too-safe pattern is dead for good**: advance while targeted 34–37% per session,
+  deaths spread across all five zones
+- **Prone has been abandoned by the player**: 20 of 539 samples (3.7%, ~10 s across the
+  whole batch). Mesh hits made it genuinely exposed and it feel-checked as still worth
+  doing — but it is not being used. Watch it after the tuning batch
+- **Telemetry gap found and FIXED same day**: `hit_player` carries the shooter in the `gun`
+  column but `AnalyzePlaytests.py` counted every hit as MG. Now split, and the boundary is a
+  named constant (`Playtest::InfantryShooterIdBase`) instead of three scattered `1000`s that
+  the analyzer silently mirrored. Corrected figures for this batch: **MG 2.14%
+  (98 of 4,571), infantry 29.41% (5 of 17)**
+
+Then the lateral defect was grilled question-by-question (16 of them) and the whole fix
+built and compiled clean — **Decision 041**, none of it yet run in PIE:
+
+- `BeachAllySim`: `AcquireTakeoverAlly` (disc + forward clamp) replaces `SelectTakeoverSlot`,
+  `ManufactureTakeoverAlly` + `SpawnAllyAt` + `FindReusableSlot` (eviction) added,
+  `InitialiseAlly` factored out so both spawn paths cannot drift apart, `CountAlliesInDisc`
+  replaces `CountAlliesInSlab`, ladder and `TakeoverRearStep` deleted, `MaxAlive` 32 → 128
+- PlayerController: `DeathAnchorY` → a 2D `DeathAnchor`; the no-candidate branch now logs an
+  Error naming the anchor instead of silently holding on black
+- Telemetry + analyzer reworked as above; verified to still read all twelve older sessions
+
+## What Was Done (2026-08-16)
 
 Grilling resumed at Q5 and ran to Q12; the whole death→transition spec is now settled
 (**Decision 038 completed, plus Decisions 039 and 040**). Then the entire pass was built
