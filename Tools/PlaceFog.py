@@ -1,0 +1,191 @@
+# Places the beach fog (Decision 055 workstream A: fog goes FIRST, so nothing downstream
+# is tuned twice) plus an optional range-marker ruler for calibrating it by eye.
+#
+# Fog is load-bearing per 01_SOUL.md Principle 5: it removes time sense, limits visibility,
+# and licenses NPC spawn/despawn outside view. It also sets the numbers several systems read
+# (Decision 055) - see the WHAT FOG FEEDS note below before propagating anything.
+#
+# Run from inside the UE editor (with Lvl_FirstPerson open) - spawning crashes headless:
+#   Tools menu > Execute Python Script... > pick this file
+#
+# Idempotent: everything is tagged FOG_TAG; re-running clears the previous batch. Edit the
+# constants below and re-run to iterate. All numbers tentative per CLAUDE.md.
+#
+# WHAT FOG FEEDS (Decision 055) - do NOT blanket-propagate one number into all of these:
+#   FAllySimSettings.TakeoverRadius   3500  (35 m)  - "the man you could have seen". Tracks
+#                                                     player visibility directly.
+#   FInfantrySettings.MaxEngagementRange 12000 (120 m) - comment calls it a fog stand-in.
+#   FMGSettings.VisibilityMaxRange   50000 (500 m)  - the MGs must still reach Zone 1, the
+#                                                     kill zone at 230-310 m. Setting this to
+#                                                     player visibility deletes the kill zone.
+# Player visibility and weapon engagement range are different distances. Settle them in the
+# walkthrough, one at a time, not with a find-and-replace.
+
+import unreal
+
+M = 100.0
+FOG_TAG = "BeachFog"
+FOLDER = "Fog"
+CYLINDER = "/Game/LevelPrototyping/Meshes/SM_Cylinder.SM_Cylinder"
+
+# --- fog knobs -------------------------------------------------------------------------
+# Drafted in 02_STATUS.md, never yet run. Target is ~35 m visibility (09_ALLY_NPC.md still
+# lists 30 m vs 40 m as open - this walkthrough is what settles it).
+# Iterating: extinction is exponential, so DOUBLING density roughly HALVES the distance at
+# which a shape disappears. Change one knob at a time and re-run.
+FOG_DENSITY = 0.5           # the main dial
+FOG_HEIGHT_FALLOFF = 0.05   # low = the fog layer stays thick well above head height
+FOG_MAX_OPACITY = 1.0       # 1.0 = things genuinely vanish rather than staying ghosted
+FOG_START_DISTANCE = 500.0  # cm; keeps the near field clear so held items stay readable
+FOG_ACTOR_Z_M = 0.0         # fog origin at the waterline; falloff is measured from here
+VOLUMETRIC_FOG = False      # off for the greybox pass - it is a large frame cost
+FOG_COLOR = (0.42, 0.44, 0.47)  # flat overcast grey; "gray, hazy, only shapes visible"
+
+# --- calibration ruler ------------------------------------------------------------------
+# A stand-here post plus numbered posts at known distances inland, so "35 m visibility" is
+# measured instead of guessed: stand at the base post, look inland, note which post is the
+# last one you can make out. Set to False and re-run to remove them once fog is settled.
+PLACE_RANGE_MARKERS = True
+MARKER_LANE_X = 510         # profile x - the centre lane, between the craft and the bunkers
+MARKER_BASE_Y = 320         # profile y - Zone 1, flat ground, clear sightline inland
+MARKER_RANGES_M = [10, 20, 30, 40, 50, 60, 80, 100]
+MARKER_HEIGHT_M = 1.8       # a man's height, so it reads as "could I see a soldier there"
+MARKER_RADIUS_M = 0.15
+
+CORNER = {"x": 0.0, "y": 0.0}
+
+
+def landscape_min_corner(eas):
+    for actor in eas.get_all_level_actors():
+        if isinstance(actor, unreal.Landscape):
+            origin, extent = actor.get_actor_bounds(False)
+            return origin.x - extent.x, origin.y - extent.y
+    return None
+
+
+def world_xy(x_m, y_m):
+    return CORNER["x"] + x_m * M, CORNER["y"] + y_m * M
+
+
+def ground_z(world, x, y):
+    result = unreal.SystemLibrary.line_trace_single(
+        world, unreal.Vector(x, y, 50000.0), unreal.Vector(x, y, -50000.0),
+        unreal.TraceTypeQuery.TRACE_TYPE_QUERY1,
+        True, [], unreal.DrawDebugTrace.NONE, True)
+    if result is None:
+        return None
+    fields = result.to_tuple()
+    if not fields[0]:
+        return None
+    for f in fields:
+        if isinstance(f, unreal.Vector):
+            return f.z
+    return None
+
+
+def clear_previous(eas):
+    removed = 0
+    for actor in eas.get_all_level_actors():
+        if actor.actor_has_tag(FOG_TAG):
+            eas.destroy_actor(actor)
+            removed += 1
+    return removed
+
+
+def try_set(obj, name, value):
+    """Property names drift between engine versions; report misses instead of aborting."""
+    try:
+        obj.set_editor_property(name, value)
+        return True
+    except Exception as exc:
+        unreal.log_warning("fog: could not set '%s' (%s) - set it by hand in Details" % (name, exc))
+        return False
+
+
+def fog_component(actor):
+    try:
+        component = actor.get_editor_property("component")
+        if component is not None:
+            return component
+    except Exception:
+        pass
+    return actor.get_component_by_class(unreal.ExponentialHeightFogComponent)
+
+
+def place_fog(eas):
+    _, _ = world_xy(0, 0)
+    actor = eas.spawn_actor_from_class(
+        unreal.ExponentialHeightFog,
+        unreal.Vector(0.0, 0.0, FOG_ACTOR_Z_M * M),
+        unreal.Rotator())
+    actor.tags = [unreal.Name(FOG_TAG)]
+    actor.set_folder_path(FOLDER)
+    actor.set_actor_label("BeachFog")
+
+    component = fog_component(actor)
+    if component is None:
+        unreal.log_error("fog: spawned the actor but found no ExponentialHeightFogComponent.")
+        return actor
+
+    colour = unreal.LinearColor(FOG_COLOR[0], FOG_COLOR[1], FOG_COLOR[2], 1.0)
+    try_set(component, "fog_density", FOG_DENSITY)
+    try_set(component, "fog_height_falloff", FOG_HEIGHT_FALLOFF)
+    try_set(component, "fog_max_opacity", FOG_MAX_OPACITY)
+    try_set(component, "start_distance", FOG_START_DISTANCE)
+    try_set(component, "volumetric_fog", VOLUMETRIC_FOG)
+    if not try_set(component, "fog_inscattering_luminance", colour):
+        try_set(component, "fog_inscattering_color", colour)
+    return actor
+
+
+def place_markers(eas, world):
+    mesh = unreal.load_asset(CYLINDER)
+    if mesh is None:
+        unreal.log_warning("fog: cylinder mesh missing, skipping the calibration ruler.")
+        return 0
+    bb = mesh.get_bounding_box()
+    native = bb.max - bb.min
+    placed = 0
+
+    for label, offset_m in [("STAND_HERE", 0)] + [("%dm" % r, r) for r in MARKER_RANGES_M]:
+        x, y = world_xy(MARKER_LANE_X, MARKER_BASE_Y + offset_m)
+        gz = ground_z(world, x, y)
+        if gz is None:
+            unreal.log_warning("fog: no ground under marker %s, skipped" % label)
+            continue
+        actor = eas.spawn_actor_from_object(mesh, unreal.Vector(x, y, gz), unreal.Rotator())
+        actor.set_actor_scale3d(unreal.Vector(
+            MARKER_RADIUS_M * 2 * M / native.x,
+            MARKER_RADIUS_M * 2 * M / native.y,
+            MARKER_HEIGHT_M * M / native.z))
+        origin, extent = actor.get_actor_bounds(False)
+        actor.add_actor_world_offset(
+            unreal.Vector(x - origin.x, y - origin.y, gz + extent.z - origin.z), False, False)
+        actor.tags = [unreal.Name(FOG_TAG)]
+        actor.set_folder_path(FOLDER + "/RangeMarkers")
+        actor.set_actor_label("FogRange_" + label)
+        placed += 1
+    return placed
+
+
+def main():
+    eas = unreal.get_editor_subsystem(unreal.EditorActorSubsystem)
+    world = unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem).get_editor_world()
+    corner = landscape_min_corner(eas)
+    if corner is None:
+        unreal.log_error("No Landscape found in the open level. Open Lvl_FirstPerson and retry.")
+        return
+    CORNER["x"], CORNER["y"] = corner
+
+    removed = clear_previous(eas)
+    place_fog(eas)
+    markers = place_markers(eas, world) if PLACE_RANGE_MARKERS else 0
+
+    unreal.log("Fog done. Cleared %d previous, placed 1 ExponentialHeightFog "
+               "(density %s, falloff %s, start %s cm) and %d range markers. "
+               "SAVE THE LEVEL, then walk it: stand at FogRange_STAND_HERE, look inland, "
+               "and note the last post you can make out."
+               % (removed, FOG_DENSITY, FOG_HEIGHT_FALLOFF, FOG_START_DISTANCE, markers))
+
+
+main()
