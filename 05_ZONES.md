@@ -3,7 +3,7 @@
 ## Map Overview
 
 Fog-covered beach. Advance from bottom to top.
-5 zones, 3 bunkers, 3 enemy infantry positions, 3 landing craft.
+5 zones, 3 bunkers, 3 enemy infantry positions, 7–9 landing craft (Decision 048).
 
 ```
 [High Ground — Breach Objective]
@@ -35,8 +35,11 @@ Zone 0: Landing Point
 
 ### Zone 0 — Landing (5~15 seconds)
 Starts the moment the landing craft ramp drops. Wade from water to beach.
-3 craft positioned left/center/right — starting craft determines
-left/center/right beach route.
+**7–9 craft roughly 75 m apart** across the frontage (Decision 048, raised from 3 at 280 m)
+— your starting craft determines your lane up the beach. Craft **sail in, ground, drop the
+ramp, disgorge ~25–30 men and back off** (Decision 049); they are a running cycle, not
+scenery. The three-column spawn geography that left 130–140 m of the beach empty is what
+this replaces.
 
 ### Zone 1 — Waterline, Kill Zone (10~30 seconds)
 Zero cover. Crossfire from bunker MGs. Most deaths happen here.

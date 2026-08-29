@@ -287,8 +287,30 @@ Data-oriented per Decision 021: managers tick arrays of state structs; actors ar
 
 - [ ] MG max rotation speed value — tune in prototype
 - [ ] Belt size / heat-per-shot / cooling rate / jam chance / crew-tier multipliers — tune through testing
-- [ ] Infantry count finalized (Zone 3: ~7 is tentative)
+- **SETTLED — infantry count and layout**: ~**90 defenders** total — ~45 in the fire trench,
+  7 in the forward outposts, 18 MG crew (Decision 027's garrison-6 × 3), ~20 in the
+  reinforcement pool. Distributed as **strongpoints at the bunkers, thin at the seams**, not
+  uniformly. Decision 055, 2026-08-29. Sized from fog rather than guessed: 35 m visibility
+  puts ~70 m of line in view, so 1 man per 10–15 m means you see 5–7 defenders together, and
+  it gives a 3:1 attacker ratio against ~300 allies. The trade this creates is the point —
+  **a machine gun up the bunker lane, riflemen up the seam**
 - [ ] Infantry aiming time value — tune through testing
-- [ ] Infantry inter-position movement frequency and condition details
+- [ ] Infantry inter-position movement frequency and condition details — the *mechanism* is
+  settled (Decision 046: they walk the trench waypoint graph, which also absorbs Decision
+  036's deferred relocation layer 3). Frequency and trigger conditions are still open.
+  Decision 053 adds one trigger for free: a soldier whose shot is blocked by a friendly holds
+  ~3 s, then prefers moving to a free adjacent node over rising and firing
 - [ ] Allied NPC behavior when enemy is playable
-- [ ] Zone 4 bunker breakthrough mechanic (grenade? entry? suppression?)
+- **SETTLED — Zone 4 bunker breakthrough mechanic**: you go through the trench to reach the
+  bunkers, entering through the rear door the greybox already has. Decision 046, 2026-08-22.
+  Crews reinforce up the communication trench (Decision 047), so killing crew through the
+  slit is suppression rather than a permanent kill
+- **SETTLED — trench topology**: one continuous **fire trench at profile y ≈ 600**, the three
+  bunkers as strongpoints behind it at y 620/635, **three communication trenches** back to the
+  bluff at y ≈ 690, and the three Zone 3 positions staying forward at y 550–560 on the MG seam
+  lanes, joined by saps. Decision 051, 2026-08-29. Verified against Decision 045's symmetry:
+  the guns clear a ducked man in the fire trench by +3.3 m (flank) and +3.8 m (centre), and
+  clear a standing outpost head by +2.6 m
+- **SETTLED — allies can take trench sections**: a cleared section stays cleared for a while
+  and the bunker it feeds goes quiet when reinforcement cannot reach it, then the enemy
+  retakes it. The *global* ending stays the player's. Decision 050, 2026-08-29

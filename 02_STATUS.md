@@ -1,38 +1,54 @@
 # Current Status
 
-> Last updated: 2026-08-17
+> Last updated: 2026-08-29
 >
 > This document holds the CURRENT state and what's next — nothing else. Session history
 > lives in git log; the why of past choices lives in 03_DECISIONS.md; engine gotchas live
 > in 11_ENGINE_NOTES.md. When updating, replace stale facts instead of appending below them.
 
-## Phase: Steps 4+5 loop FEEL-CHECKED AND PASSED 2026-08-17, and the beach was crossed for the first time. First life/session telemetry batch analyzed — one real defect found (lateral takeover jump)
+## Phase: THE BEACH ARC — Decisions 042–055 all grilled and logged, build order settled, workstream A (fog) starting. NOTHING IS BUILT YET
 
-The death → takeover loop exists, closes, and was feel-checked green on every question on
-the list: corpse weight, two-shot tell, the ~3.5 s leash, mid-stride and prone handover,
-prone exposure, and the rifle + Z3 infantry pass. The ratchet works — a session is now one
-continuous push instead of 24 resets to the craft, and the player reached the bunker line
-and beyond (714 m) for the first time in the project's history.
+The 2026-08-22 direction change stands: **tuning detail on a beach whose systems do not
+exist yet is measuring absence, not balance.** Decisions 042–047 set the shape of the arc
+that fixes that. The 2026-08-29 session **finished the grilling** (Q9–Q27, 19 questions) and
+logged **Decisions 048–055**, which settle every branch that was left open — ally supply,
+the trench, fire discipline, personalities, the enemy garrison, and the build order itself.
 
-The batch analysis turned up one real defect — **takeover threw the player a median 260 m
-sideways** (max 541 m) because the rule constrained Y and not X. That was grilled through
-16 questions and **fixed the same day (Decision 041, compiled clean, NOT yet run)**: the
-selection slab is now a fog-radius disc, the rear-expansion ladder is gone, an empty disc
-manufactures a man at the fog edge, and `MaxAlive` went 32 → 128 because ally starvation
-turned out to be the root cause.
+In one sentence each, the new eight:
 
-The bare-respawn scaffolding is GONE (`PlayerSpawnTransform` deleted). `MGNoDamage`
-remains for observation; silence itself still signals MG stops (per-type stop sounds wait
-for the sound pass).
+- **048** — no density director; allies come only from craft, **7–9 of them ~75 m apart**, in
+  **boatloads** of ~25–30, `MaxAlive` ~300. The per-zone density curve becomes an outcome we
+  measure, not a rule the game enforces.
+- **049** — craft **sail in, ground, drop the ramp, disgorge and back off**; takeover
+  manufacture is kept forever as an **invisible** safety net (it fires behind a black screen).
+- **050** — `DespawnY` is removed; allies **break into the trench and fight there**, sections
+  fall locally and are retaken, and the **global ending stays the player's**.
+- **051** — continuous **fire trench at y ≈ 600**, bunkers as strongpoints behind it, **three
+  communication trenches**, Zone 3 positions **stay forward on the MG seam lanes** with saps.
+- **052** — the trench is a **hybrid**: a 6 m × 1.2 m heightmap carve plus scripted parapet;
+  a hand-authored **centerline table** is the one artifact and the graph derives from it.
+- **053** — blocked fire is **not a state**; oscillation needs no rule (the blocking relation
+  is geometrically asymmetric); the player gets a **muzzle lift**.
+- **054** — ally accuracy is a **data row** (~0.5–1% at Z3); personalities land **in full**;
+  cover is one flat array in which **corpses register as cover points**.
+- **055** — the defense is **strongpoints, thin at the seams** (~90 men); the arc is built
+  **terrain-first**, and Decision 043's merge exits on **parity**.
 
-All grey-box geometry is placed. Fog and the zone-size walkthrough are DEFERRED until after
-more system work (user decision 2026-07-04) — pick them up before tuning zone sizes.
+**Two measurements from the 2026-08-22 CSVs drove most of this**, and they overturned the
+working assumption. Attrition is *not* what empties the top of the beach: 175 ally deaths in
+194.5 s is 0.90/s against a 1.5/s ceiling, so ~40% of men walk off the top alive. The
+emptiness is **lateral** — ally deaths form three columns with **130–140 m of frontage
+containing essentially nobody**, and the measured 90% play band (x 463→797) sits across one
+of those gaps.
+
+All grey-box geometry is placed. Fog now sets **four** numbers (visibility, `TakeoverRadius`,
+the render bubble, and `FInfantrySettings`' perception cap) and goes first for that reason.
 
 ## What Exists
 
 ### Documents
 - [x] Project mental model (01_SOUL.md)
-- [x] Decision log (03_DECISIONS.md) — 33 entries
+- [x] Decision log (03_DECISIONS.md) — 55 entries
 - [x] Design principles (04_PRINCIPLES.md) — 7 principles
 - [x] Beach map v2 (05_ZONES.md) — 5 zones, 3 bunkers, 3 infantry positions, comm trenches
 - [x] Combat system design (06_COMBAT.md) — controls, damage, cover, per-zone rhythm
@@ -142,8 +158,11 @@ more system work (user decision 2026-07-04) — pick them up before tuning zone 
   **`MaxAlive` 32 → 128 on 2026-08-17 (Decision 041, NOT yet run)**: 32 was a Step 3
   placeholder that left a median of ONE live ally in a band spanning the whole beach width,
   against `09_ALLY_NPC.md` §118's spec of 8–12 within visible range — the root cause of the
-  260 m lateral takeover jump. The per-zone density curve and fog-edge top-up spawning stay
-  deferred to the rendered-ally pass. Watch the frame cost: `AdvanceAlly` is one ground
+  260 m lateral takeover jump. **Superseded by Decision 048**: `MaxAlive` goes to
+  ~300, fog-edge top-up spawning is struck outright, and the per-zone curve becomes an
+  outcome produced by boatload arrival rather than a target the game maintains. The 2026-08-22
+  batch showed 32 → 128 thickened the waterline and changed nothing at the top, because the
+  problem is lateral: three columns, 130–140 m of empty frontage between them. Watch the frame cost: `AdvanceAlly` is one ground
   trace per ally per tick and `EvaluatePerception` runs per gun over the whole array (cheap
   early-outs first, then 3 exposure traces), so this is ~4× the perception work. If it
   bites, slice perception across ticks rather than shrinking the wave.
@@ -375,111 +394,114 @@ more system work (user decision 2026-07-04) — pick them up before tuning zone 
 
 ## Next Steps
 
-- [x] ~~Pre-flight: verify the infantry level save~~ — DONE 2026-08-16, verified from the
-  external-actor files on disk. The 7 soldiers, the manager and the parapets are all there
-- [x] ~~Pre-flight: run `Tools/GeneratePlayerPainAudio.py`~~ — DONE 2026-08-17,
-  `Content/Audio/PlayerPain.uasset` disk-verified. **Pre-flight is now clear; PIE is
-  unblocked**
-- [x] ~~**The feel-check**~~ — DONE 2026-08-17, ALL PASSED: loop closes, two-shot reads,
-  the ~3.5 s leash is right, mid-stride and prone handover both read as waking up, prone
-  still worth doing, and the rifle + Z3 infantry pass is good. Neither known failure mode
-  appeared (no infinite black screen; the player is hittable, so the mesh trace finds bodies)
-- [x] ~~**`AnalyzePlaytests.bat`**~~ — DONE 2026-08-17, first life/session batch (3 sessions,
-  26 lives, 23 takeovers). Findings in What Was Done below
-- [x] ~~**DECIDE FIRST — the lateral takeover jump**~~ — grilled and BUILT 2026-08-17
-  (Decision 041, compiles clean). Fog-radius disc for both search and spawn, ladder deleted,
-  manufacture-at-the-fog-edge fallback, `MaxAlive` 32 → 128, telemetry reworked
-- [ ] **RESUME HERE — PIE the new takeover rule.** It has not run once. What to watch:
-  - **Does the handover still read as waking up** when the man is always within 35 m —
-    and can you tell a manufactured man from a real one? You should not be able to
-  - **Density at 128.** The beach should feel more populated everywhere; watch for a frame
-    cost (3 guns × allies in arc × 3 exposure traces). If it bites, slice perception across
-    ticks — do NOT shrink the wave back
-  - **Watch the log for the two Errors**: "no valid ground at any radius" (unreachable by
-    design — if it fires, the death point is inside geometry) and Decision 039's
-    "no usable physics bodies"
-  - **The prone start now comes from the manufacture path too** (`SpawnAllyAt` rolls
-    `PronePauseChance`), so waking prone should be roughly as common as before, not rarer
-- [ ] **Then `AnalyzePlaytests.bat` again** — the first batch that can answer Decision 041's
-  own question. Read `made %` in the session envelope first (what fraction of takeovers had
-  to manufacture a man — if it is near zero, 128 was enough; if it is high, the fog-edge
-  top-up is unavoidable), then `disc med` and the 2 Hz `disc_allies`, then whether `back m`
-  really fell to near zero
-- [ ] **Then, in one batch**: tune PlayerTargetScoreMultiplier (MG) +
-  FInfantrySettings.PlayerTargetScoreMultiplier + infantry knobs together — both coded,
-  both untuned (Decision 035). The batch now has direction:
-  - **MG player-priority is done overshooting and can probably come down.** Advance while
-    targeted is 34–37% per session (was 7% for three straight batches). 2,156 rounds came
-    at the player in 26 lives
-  - **Infantry volume, not accuracy, is the knob.** Infantry hit the player 5 times on 17
-    shots — a **29% hit rate against the MGs' 2.2%** — but fired only 131 rounds total,
-    13% of them at the player, i.e. one shot per soldier per ~19 s. Raise rate (cycle
-    wait) and PlayerTargetScoreMultiplier; do NOT touch their dispersion
-  - Step 3 checklist questions (hit frequency, crater survival, stop windows) stay open
-- [ ] **The wounded state does not exist in play** — median 0.40 s between the wound and the
-  killing round, 16 of 21 non-headshot deaths inside 1 s, because MG fire arrives in bursts
-  and the second round is in the same burst. This is a **do-not-build-yet signal for the
-  deferred wounded presentation** (vignette, blur, aim sway, speed drop): at 0.4 s it would
-  never be seen. If a wounded *phase* is wanted, the lever is MG burst discipline (pause or
-  switch after a hit registers), not `WoundsToKill`. Two-shot's real contribution this batch
-  was different and valuable: it absorbed the in-flight-round artifact — two takeovers were
-  hit 0.31 s and 0.60 s after handover by the previous life's bullets and SURVIVED, where
-  the same event caused the 2026-08-11 respawn death spiral
-- [ ] **Six rifle rounds silence a bunker permanently, and the garrison's depth never gets
-  to matter.** Measured: 7 rounds at 617 m killed all 6 crew of gun 2 in 2.4 s (one kill per
-  round, `remain` 5→0), and the life that followed was the longest of the batch (35.4 s).
-  `TakeoverDuration` is 3–6 s, so each replacement is killed while still taking over, well
-  inside his own stop; `CrewAlive` 0 is permanent, with no reinforcement path. This is
-  currently the whole answer to "how do you break the bunker line" — decide whether it is
-  THE answer before building Z4 infantry and the comm-trench breakthrough
-- [ ] **The far side of the defense line is empty.** The ratchet now delivers the player past
-  the bunkers (max reach 714 m, 80 m past the line) because sim allies keep walking to
-  ~660 m and takeover follows them forward. Session A's last life ran 15 s up there with
-  zero rounds fired at it. Bounding the ally advance (or building what is behind the line)
-  is now gameplay-visible, not cosmetic
-- Debug aids: **F7** = MG + ally + infantry readout; `MGNoDamage` observe mode (taints
-  the life for combat stats), `MGKillCrew` = takeover windows
-- Greybox caveats: tracers converge on invisible sim allies (fog + rendered allies fix
-  that later); infantry can only be killed by the player's rifle (nothing else shoots at
-  them yet); soldiers re-emerge in the same spot until the relocation layer is built —
-  pre-aiming a known spot wins, expected, don't tune around it; sim allies now walk
-  through the greybox bunkers and on up the bluff to profile 660 m (unrendered, nothing
-  to see, but MG and infantry attention is spent behind the bunker line). Beach length
-  judgment still deferred: re-judge after the priority tuning batch + fog, not before
-- **Telemetry comparability broke again** at 2026-08-16: two-shot damage and mesh hit
-  volumes mean lethality, hit rate and prone exposure are all on new footing. Sessions
-  before this date are not comparable for anything combat-related
-- **And again at 2026-08-17 (fourth break), for takeover only**: `ladder` and `slab_allies`
-  are dead columns, and `MaxAlive` 32 → 128 changes ally density everywhere. The three
-  2026-08-17 sessions stay readable (the analyzer prints `-` and says how many takeovers
-  predate Decision 041) but their takeover and give-back numbers are not comparable to what
-  comes next. Combat figures from 08-16 onward are still comparable
+### The build order (Decision 055) — terrain-first, in this sequence
+
+Only workstream **E** has no playable state. Everything before it is verifiable in PIE with
+today's systems still running.
+
+- [ ] **A — Fog.** `ExponentialHeightFog`, tune by eye for ~35 m visibility: Density ~0.5,
+  Height Falloff ~0.05, Start Distance ~500. Then propagate the settled number into
+  `TakeoverRadius` (Decision 041), the render bubble (042) and `FInfantrySettings`'
+  perception cap. **Revisit once** after allies render — the real test is "can I see the man
+  I am about to become", which needs Decision 042. Do the two Step 2 leftovers in the same
+  walkthrough: judge zone sizes, and record zone transit times into `05_ZONES.md`
+- [ ] **B — Landscape.** Add the trench channel (6 m wide × 1.2 m deep) to
+  `GenerateBeachHeightmap.ps1`, regenerate, re-import. **Clean up the three duplicate
+  Landscape parent actors in the same pass** — check which owns the 64 streaming proxies
+- [ ] **C — Trench geometry + nodes.** Hand-author the centerline table; one script emits
+  parapet, firing steps, saps to the three outposts, and tagged `TrenchNode` actors
+  (~115–120). In-editor run plus a level save, as with the infantry pass
+- [ ] **D — Craft.** 7–9 hulls in `LANDING_CRAFT`; arrival/ground/ramp/disgorge/depart cycle;
+  boatload spawning replaces the 1.5/s trickle; `MaxAlive` → ~300
+- [ ] **E — Decision 043 merge. NOTHING IS PLAYABLE WHILE THIS IS IN FLIGHT.** ~850 lines
+  across both soldier systems. **Exit condition is parity: the game plays exactly as it does
+  today, on one soldier system**, measured against existing telemetry. `BeachAllySim` is
+  retained as a switchable, still-runnable debug path (Decision 043)
+- [ ] **F — Graph movement.** A* over the node graph, node reservation, infantry relocation
+  (Decision 036's layer 3, arriving here), MG crew reinforcement up the comm trench (047)
+- [ ] **G — Fire.** Ally fire with zone gating and `AllyRifle` collision row (044), muzzle-
+  flash conspicuity applying to the player too (044), symmetric fire discipline (045),
+  blocked-as-failed-check + node reservation (053), player muzzle lift (053), ally spread
+  row (054)
+- [ ] **H — Population.** Ally corpses with a cap (**prerequisite — allies leave no body
+  today**), the flat cover array with corpses registering as cover points, the four
+  personality types, Leader influence on Frozen, Leader shouts (054)
+- [ ] **I — The line.** ~90 defenders in strongpoints thin at the seams (055), ally
+  breakthrough into the trench, local section fall and retake (050)
+- [ ] **J — Telemetry.** Fix the `disc_allies` bug (the 2 Hz sample calls `CountAlliesInDisc`,
+  which does **not** apply the `TakeoverForwardReach` filter, while the takeover row's
+  `disc_allies` does — two meanings under one name, and the sampled figure overstates
+  candidates). Add `FInfantrySettings` to the settings snapshot, record live ally positions,
+  fix "run" = one life breaking once deaths chain, and fix `AnalyzePlaytests.bat` crashing on
+  a cp949 console at the AGGREGATES em-dash (run with `PYTHONIOENCODING=utf-8` meanwhile)
+
+**Definition of done for the arc** (Decision 055): the player can advance up a seam lane,
+fight into the fire trench, and reach a bunker's rear door. Allies visibly fight and die
+alongside, and their fire pulls the guns off him. Enemy infantry relocate along the trench
+and MG crews reinforce up the communication trench. A bunker can go quiet because allies cut
+its communication trench, and the enemy can retake it. Telemetry records enough to tune any
+of it. **Not in this arc**: the ending, the high ground, the enemy-playable side.
+
+### Numbers still open (all tentative, tune after the systems exist)
+
+Exact craft count and arrival cadence; boatload size; final `MaxAlive`; the trench centerline
+route; ally corpse cap; every spread value; the fog distance itself (30 m vs 40 m).
+
+### Explicitly OFF the list
+
+- **The MG + infantry `PlayerTargetScoreMultiplier` tuning batch is cancelled**, not
+  deferred. Decision 044's muzzle-flash bonus makes the player's score situational rather
+  than a flat 3×, and Decisions 043–055 change every input to it
+- **Do not tune against the 2026-08-22 or earlier batches.** Decision 047 attaches this
+  explicitly, and Decisions 048–055 change ally supply, ally lethality, the defense line and
+  the terrain. Those numbers are a record of a different game
+- **The wounded presentation stays unbuilt.** First wound → death is median **0.17 s**, 9 of
+  12 under one second. At that interval a vignette or blur is never seen. The lever, if a
+  wounded *phase* is ever wanted, is MG burst discipline
+- **Takeover density tuning is on hold** — Decision 049 keeps manufacture permanently and
+  Decision 048 changes every input to the disc
+
+### Kept from the 2026-08-22 batch — the last comparable measurement before everything changes
+
+- **Decision 041 verified**: takeover distance median 27 m / max 35 m (hard cap); lateral
+  median 7.9 m; give-back median 18.8 m, max 29 m, 3 of 12 forward. Zero "no valid ground at
+  any radius", zero "no usable physics bodies"
+- **Ally deaths are three columns, not a curve**: upper beach, 36 men at profile x 175–275,
+  **1** at 300–440, 40 at 450–550, **0** at 560–690, 20 at 700–800. The gaps are the MG seam
+  lanes — the exact ground the Zone 3 outposts cover and no ally has ever walked
+- **Attrition is 0.90 ally deaths/s** over 194.5 s against a 1.5/s spawn ceiling; only **12 of
+  175** deaths occur above profile y 575
+- **Prone handover: 0 of 12.** Steady-state prone should be ~20%, so p ≈ 7%. Not yet a bug —
+  watch it, and if the next batch is also 0 it is real
 
 ### Writing backlog
 - [ ] Second character ("the one who shook me") narrative writing
 - [ ] First enemy character narrative writing
 
 ### Deferred until after more system work (decided 2026-07-04; transit times added 2026-07-18)
-- [ ] Infantry relocation (layer 3, Decision 036 — user wants this built later, on the
-  record): intra-trench sidesteps under concentrated fire, re-emerging from a different
-  spot after being shot at, falling back when the player closes, move sounds. Build after
-  the first infantry feel-check shows the pre-aim exploit actually biting
-- [ ] Z4 infantry — build together with communication-trench geometry and the bunker
-  breakthrough design (open question in 08_ENEMY_AI.md)
-- [ ] Dug-in foxhole/trench terrain (heightmap) replacing the parapet greybox — visual
-  pass, once infantry positions stop moving
+- [x] ~~Infantry relocation (layer 3, Decision 036)~~ — **NO LONGER DEFERRED**: folded into
+  Decision 046. A soldier who can walk the trench graph can sidestep under fire and
+  re-emerge elsewhere, so relocation falls out of the navigation work rather than being a
+  separate layer. The pre-aim exploit Decision 036 predicted is visible in the 2026-08-22
+  batch, which was the stated trigger
+- [x] ~~Z4 infantry — build with communication-trench geometry and the breakthrough design~~
+  — **NO LONGER DEFERRED**: this IS the 2026-08-22 arc. The breakthrough question is settled
+  (Decision 046: you go through the trench)
+- [x] ~~Dug-in foxhole/trench terrain replacing the parapet greybox~~ — **NO LONGER
+  DEFERRED**: this is workstreams B and C above. Decision 052 settles how it is authored
+  (6 m × 1.2 m heightmap carve + scripted parapet), because box walls on grade would leave a
+  man's head at grade + 1.7 m and Decision 045's exposure gain would evaporate
 - [ ] FP arms rifle montages: if the template FP ABP turns out to have no DefaultSlot,
   either add a Slot node to ABP_FP_Copy (headless graph edit, see 11_ENGINE_NOTES.md) or
   live without arm motion until the visual pass
-- [ ] Fog setup — do this before judging zone sizes; fog is load-bearing.
-  ExponentialHeightFog, tune by eye for ~35 m visibility: Density ~0.5,
-  Height Falloff ~0.05, Start Distance ~500
-- [ ] Walk through the grey-box and judge zone sizes; adjust the heightmap Profile table if needed
-- [ ] Run through each zone and record transit times in 05_ZONES.md (Step 2's last open
-  item) — do together with the fog walkthrough so the times aren't measured twice
-- [ ] Clean up duplicate Landscape parent actors: the level has three (`Landscape`,
-  `Landscape2`, `Landscape4`, all at −50400/−50400) — re-import leftovers. Check in the
-  editor which one owns the 64 streaming proxies and delete the empty ones
+- [x] ~~Fog setup~~ — **NO LONGER DEFERRED**: workstream A above, and it goes FIRST
+  (Decision 055). It sets **four** numbers, not three — visibility, `TakeoverRadius` (041),
+  the render bubble (042), and `FInfantrySettings`' perception cap, whose comment already
+  says "fog stand-in… until real fog owns the vision cap"
+- [x] ~~Walk through the grey-box and judge zone sizes~~ and ~~record transit times~~ — both
+  folded into workstream A's single walkthrough
+- [x] ~~Clean up duplicate Landscape parent actors~~ (`Landscape`, `Landscape2`, `Landscape4`,
+  all at −50400/−50400) — folded into workstream B's re-import, so a fourth is not added
 - [ ] Dive-into-prone polish (closed as good-enough 2026-07-17): if the flight ever feels
   flat, the lead is a brief additive camera pitch-down during flight
 
@@ -489,7 +511,73 @@ so world = profile-meters × 100 − 50400 on both axes. Profile coords below wi
 - Landing craft (Zone 0, ramp faces +Y inland): A-left 230/270 (−27400, −23400), B-center 510/270 (600, −23400), C-right 790/270 (28600, −23400)
 - Bunkers (Zone 4, slit faces −Y sea): MG-left 200/620 (−30400, 11600), MG-center 510/635 (600, 13100), MG-right 800/620 (29600, 11600)
 
-## What Was Done (last session — 2026-08-17)
+## What Was Done (last session — 2026-08-29)
+
+**The grilling that 2026-08-22 left unfinished is finished.** 19 questions (Q9–Q27),
+**Decisions 048–055 logged**, every open branch closed, and the build order settled. Still
+**nothing built** — by design; workstream A starts now.
+
+- **Q9's premise was wrong, and reading the code found it.** The inherited worry was that
+  rendered allies would make takeover *manufacture* visible — a man appearing from nothing
+  35 m away. But `TryTakeover()` runs at the **end of the FadeOut phase with the screen fully
+  black**, and `KillAlly(Slot)` consumes the manufactured slot in the same synchronous call.
+  The man never survives a frame and never renders. Manufacture is kept permanently
+  (Decision 049); what it actually signalled was a density hole, closed upstream instead
+- **The density hole was measured, not guessed, and the working assumption was wrong.**
+  Attrition is fine: 175 ally deaths / 194.5 s = 0.90/s against a 1.5/s ceiling, ~40% of men
+  survive to the top. The emptiness is **lateral** — three columns with 130–140 m of frontage
+  holding nobody, and the play band sits in a gap. `MaxAlive` 128 also **binds before a single
+  death** (transit ~120 s at ~325 uu/s wants 180 men)
+- **The seam lanes turned out to be the hinge of three decisions at once.** The ally-free gaps
+  (x 300–440, 560–690) are exactly where `PlaceInfantryPositions.py` sites its outposts, and
+  exactly Decision 034's by-design MG blind seams. Decision 048 sends allies up those lanes
+  for the first time; Decision 051 keeps the outposts there; Decision 055 thins the garrison
+  there. The result is a real choice: **a machine gun up the bunker lane, riflemen up the seam**
+- **Geometry verified before adopting, in the style of Decision 045**: a fire trench at
+  y 600 clears the flank guns' sightline by **+3.3 m** and the centre gun's by **+3.8 m**, and
+  fire-trench muzzles clear a standing outpost head by **+2.6 m**. A trench carve is viable at
+  6 m × 1.2 m but **not** at 2 m — the landscape is 1 pixel per metre
+- **Two prerequisites surfaced that were on nobody's list**: sim allies **leave no corpse**
+  (`KillAlly` just clears `bAlive`), which Decision 054 makes load-bearing because corpses are
+  cover; and Decision 046's node estimate was an order of magnitude low (~120, not "a few
+  dozen")
+- Docs updated: `09_ALLY_NPC.md` §118–138 fog-edge top-up **struck**, two open questions
+  closed; `05_ZONES.md` craft 3 → 7–9; `08_ENEMY_AI.md` infantry count settled at ~90 with
+  strongpoint layout; Decisions 045 and 046 amended in place
+
+## What Was Done (2026-08-22)
+
+Two PIE sessions of Decision 041 (14 lives, 12 takeovers), analyzed; then a direction change
+and a grilling session that produced Decisions 042–047. **No code was written.**
+
+- **PIE'd Decision 041 and analyzed the batch.** The fix works — full numbers under Next
+  Steps. The analysis also found the ally-density picture (dense at the waterline, empty at
+  the defense line, and it is a spawn-geography problem rather than a `MaxAlive` problem),
+  a `disc_allies` telemetry inconsistency, and a cp949 crash in `AnalyzePlaytests.bat`
+- **The user redirected the project**: stop improving detail while the systems are half
+  built. Allies cannot shoot, enemy infantry are seven static men, there is no trench and no
+  navigation. The queued `PlayerTargetScoreMultiplier` tuning batch was cancelled as a result
+- **Grilled the arc through eight questions** and logged **Decisions 042–047** in
+  `03_DECISIONS.md`. Facts established along the way, all verified in code or telemetry:
+  - `FSimAlly` is nine floats with no weapon — ally fire has been specified in
+    `09_ALLY_NPC.md` since the docs were written and never built
+  - `09_ALLY_NPC.md` §70's promise that ally fire draws MG priority **had no mechanism**:
+    `FiredUponScoreBonus` only triggers within `FiredUponAlertRadius` = 600 uu (6 m) of a gun
+  - **The project has no navigation system at all** — no navmesh, no `AIController`, no
+    pathfinding. Infantry never move; allies dead-reckon
+  - **The MGs already shoot over their own infantry everywhere on the beach** (+5.9 m
+    clearance firing at Z1, +2.3 m at Z3, +1.0 m at a target just behind the line), computed
+    from the `05_ZONES.md` profile and `PlaceHeroPieces.py` slit heights. Decision 045's full
+    symmetry is affordable on existing terrain
+  - The bunkers already have `back_door_left` / `back_door_right` for trench access, built by
+    `PlaceHeroPieces.py` and never usable by anything
+  - Enemy shells are found by iterating **placed level actors** (`Soldier.Shell = *It`), which
+    is why 40–60 trench infantry needs Decision 043's merge
+  - The player ranges across all three bunker lanes: 90% of play in a 334 m band, full range
+    221→834 profile m, so the defense line has ~600 m of frontage
+- **The grilling was cut short at Q9** and is unfinished — see RESUME HERE
+
+## What Was Done (2026-08-17)
 
 Feel-check completed (all green, see Next Steps) and the **first life/session telemetry
 batch** analyzed: `session_20260817_155711` / `_155901` / `_160746` — 26 lives, 23

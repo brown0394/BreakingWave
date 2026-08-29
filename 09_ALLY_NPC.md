@@ -54,6 +54,11 @@ Mix four types in deployment.
 
 ## Behavior by Zone
 
+> **ADOPTED AS WRITTEN by Decision 044 (2026-08-22).** The zone gating below is the ally
+> fire model — it is no longer aspirational. It also solves the fog problem for free: Z3
+> allies sit 0–80 m from enemy infantry, so ally fire happens at fog-ish ranges by
+> construction and no ally is asked to shoot 350 m through 35 m of fog.
+
 ### Zones 0–1 — Running Only
 - No firing. Just running or going prone.
 - Shooting a rifle here is suicide — enemy is too far and stopping to aim means death
@@ -112,16 +117,28 @@ Allied deaths must be varied for the battlefield to feel real.
 
 ### Fog-Based Spawn/Despawn
 
+> **STRUCK by Decision 048 (2026-08-29). There is no density director.** Fog-edge top-up
+> spawning is cancelled: allies enter the world only at landing craft, and the numbers below
+> are an **outcome we observe**, never a target the game maintains around the player. The
+> reason is `01_SOUL.md`'s "the player is not a hero" — a population that exists because the
+> player is near is a world that revolves around him. What replaces it: **7–9 craft ~75 m
+> apart** instead of 3 at 280 m, men arriving in **boatloads** of ~25–30 rather than a
+> trickle, and `MaxAlive` ~300. Despawn is gone too (Decision 050): men who reach the
+> defense line fight there instead of walking off the map.
+
 Player visibility is limited to 30–40m by fog.
 No need to have 90 NPCs on the full beach at once.
 
-- **Active NPCs within visible range (30–40m)**: 8–12
-- Spawn at fog edge, despawn at fog edge
-- Spawn/despawn only outside player's field of view (never appear or disappear in plain sight)
+- **Active NPCs within visible range (30–40m)**: 8–12 — *observed target, not maintained*
+- ~~Spawn at fog edge, despawn at fog edge~~ — struck, Decision 048
+- ~~Spawn/despawn only outside player's field of view~~ — struck, Decision 048
 
 ### Density Reduction Curve
 
-As zones progress, fewer living allies remain nearby.
+As zones progress, fewer living allies remain nearby. **These are outcomes to measure, not
+rules to enforce** (Decision 048). Boatload arrival produces the shape for free: a dispersing
+cluster of ~30 gives 8–12 in a 35 m disc at the waterline, thinning with distance and
+attrition toward the top.
 
 | Zone | Nearby Active Allies | Feel |
 |------|---------------------|------|
@@ -231,8 +248,12 @@ Data-oriented per Decision 021: one ally NPC system ticks an array of NPC state 
 
 ### NPC Spawning
 - NPC pooling system — pre-create and reuse
-- Spawn/despawn at fog boundary, only outside camera frustum
+- ~~Spawn/despawn at fog boundary, only outside camera frustum~~ — struck by Decision 048.
+  Allies enter only at landing craft, in boatloads, and leave only by dying (Decision 050)
 - Assign type (Charger/Cautious/Frozen/Leader) randomly on spawn (weighted ratios)
+- **Corpses are load-bearing** (Decision 054): a dying ally must leave a real body, because
+  bodies register as cover points. Today `KillAlly` sets `bAlive = false` and the man simply
+  vanishes — that is now a prerequisite, not a polish item
 
 ### Corpse Transition
 - Activate ragdoll on NPC death
@@ -253,16 +274,30 @@ Data-oriented per Decision 021: one ally NPC system ticks an array of NPC state 
 ## Open Questions
 
 - [ ] Finalize type ratios (current 30/35/15/20 is tentative)
+- **SETTLED — personality types land in full**, including Leader influence on Frozen, Leader
+  shouts, and Cautious cover-seeking against a flat cover array that holds static points
+  **and corpses**. Decision 054, 2026-08-29. Static cover is only ~35 positions beach-wide
+  against ~105 Cautious men at `MaxAlive` 300, so reservation is mandatory and most Cautious
+  men will find nothing and go prone instead — corpses are the only cover that scales
 - [ ] Finalize fog visibility distance (30m? 40m?) — **now load-bearing beyond fog itself**:
   Decision 041 ties `FAllySimSettings.TakeoverRadius` (currently 3500 uu, the midpoint of
   the range above) to this number, because the man you take over must be one you could have
   seen. Update the knob when this settles
-- [ ] Active NPC count cap — decide after profiling. `MaxAlive` is 128 as of Decision 041
-  (raised from a Step 3 placeholder of 32, which delivered ~1 nearby against the 8–12 in
-  §118). The per-zone curve below and fog-edge top-up spawning are deferred to the
-  rendered-ally pass
+- [ ] Active NPC count cap — target is **~300** under Decision 048; confirm by profiling.
+  `MaxAlive` 128 already **binds before a single death** (transit ~120 s at ~325 uu/s wants
+  180 men), and Decision 042 bounds cost by *shells* (~25–30), not population. Fog-edge
+  top-up spawning is **struck** (Decision 048) and the per-zone curve is now an observed
+  outcome of boatload arrival
+- [ ] Ally corpse cap — **now load-bearing**, not cosmetic: corpses register as cover points
+  (Decision 054) and allies currently leave no body at all. At 0.90 deaths/s the cap recycles
+  fast, so it trades cover availability against memory directly
 - [ ] Corpse count cap — decide after profiling
 - [ ] Ammo spawn probability value — tune through testing
 - [ ] Wounded NPC voice lines and count
 - [ ] Concrete values for Leader's influence on Frozen type
-- [ ] Allied NPC firing accuracy (too accurate and there's nothing for the player to do)
+- **SETTLED — allied NPC firing accuracy**: allies get their own spread row in the shared
+  model (Decision 043's "sides differ in data, never in code"), roughly `SpreadNearDeg` 2° /
+  `SpreadFarDeg` 9° against the enemy's 1°/5°, plus a longer aim cycle — about **0.5–1% per
+  shot** at Zone 3 range. Decision 054, 2026-08-29. At the enemy's own accuracy (~6–7% at
+  50 m) ~30 firing allies would kill ~1 defender per second and clear the beach in a minute.
+  The payoff of ally fire stays conspicuity (Decision 044); kills are a real but rare bonus
