@@ -6,7 +6,7 @@
 > lives in git log; the why of past choices lives in 03_DECISIONS.md; engine gotchas live
 > in 11_ENGINE_NOTES.md. When updating, replace stale facts instead of appending below them.
 
-## Phase: THE BEACH ARC — Decisions 042–055 all grilled and logged, build order settled, workstream A (fog) starting. NOTHING IS BUILT YET
+## Phase: THE BEACH ARC — Decisions 042–055 all grilled and logged, build order settled. Workstream A is WAITING ON ONE IN-EDITOR RUN (`Tools/PlaceFog.py`). NO C++ WRITTEN FOR THIS ARC YET
 
 The 2026-08-22 direction change stands: **tuning detail on a beach whose systems do not
 exist yet is measuring absence, not balance.** Decisions 042–047 set the shape of the arc
@@ -313,6 +313,14 @@ the render bubble, and `FInfantrySettings`' perception cap) and goes first for t
   - All three 2026-08-11 known gaps are closed by the above
 
 ### Tools
+- [ ] **Tools/PlaceFog.py — WRITTEN AND COMMITTED (6b81a8e), NOT YET RUN IN-EDITOR.**
+  In-editor Python; spawns the `ExponentialHeightFog` from a knob table (density, falloff,
+  max opacity, start distance, colour, volumetric off) plus an optional **calibration ruler**
+  — a `FogRange_STAND_HERE` post at profile 510/320 and man-height posts at
+  10/20/30/40/50/60/80/100 m inland, so visibility is measured rather than guessed. Idempotent
+  (`BeachFog` tag). Fog properties go through a defensive `try_set` that **warns instead of
+  aborting** if a 5.6 property name drifted — read the log on the first run. Set
+  `PLACE_RANGE_MARKERS = False` and re-run to clear the ruler. See RESUME HERE in Next Steps
 - [x] Tools/GenerateBeachHeightmap.ps1 — generates the zone-profiled heightmap
   (SourceAssets/BeachHeightmap_1009.png); re-run after editing its Profile/Dunes/Berm/Craters tables
 - [x] Tools/PlaceBeachObstacles.py — in-editor Python; spawns grey-box hedgehogs (Zone 2),
@@ -389,10 +397,56 @@ the render bubble, and `FInfantrySettings`' perception cap) and goes first for t
   (PlaceBeachObstacles.py — edit tables, re-run)
 - [x] Hero pieces placed: 3 bunkers (Zone 4), 3 landing craft with ramps (Zone 0)
   (PlaceHeroPieces.py — same workflow)
-- [ ] Fog — DEFERRED until after more system work (do before judging zone sizes)
+- [ ] Fog — **workstream A, IN PROGRESS**: `Tools/PlaceFog.py` is written and
+  committed (6b81a8e) but **has not been run in-editor yet**. See RESUME HERE
 - [ ] Duplicate Landscape parent actors cleanup — pending (see Deferred)
 
 ## Next Steps
+
+### RESUME HERE — run `Tools/PlaceFog.py` in-editor, then walk the beach
+
+Everything below is written and committed. **The one thing standing between this arc and its
+first result is an in-editor run the user does by hand** (spawning crashes headless — see
+`11_ENGINE_NOTES.md`). Nothing else in workstream A can proceed until it happens.
+
+1. Open **`Lvl_FirstPerson`** in the editor.
+2. **Tools > Execute Python Script… > `Tools/PlaceFog.py`**.
+3. **Check the editor log for `fog: could not set '…'` warnings.** The script sets fog
+   properties through a defensive `try_set` that warns rather than aborting, because
+   `ExponentialHeightFogComponent` property names can drift between engine versions. Any
+   property named in a warning was **not** applied and must be set by hand in the Details
+   panel — tell the next session which ones, so the script gets fixed rather than worked around.
+4. **SAVE THE LEVEL.** The infantry pass was nearly lost to a forgotten save; do it now.
+5. **PIE and walk it.** Stand at the post labelled **`FogRange_STAND_HERE`** (profile
+   510/320, Zone 1, flat with a clear run inland). Look inland. The numbered posts are
+   man-height (1.8 m) at **10/20/30/40/50/60/80/100 m**. Note the last one you can still make
+   out — that is the real visibility number, measured rather than guessed.
+6. **Iterate if needed.** Edit `FOG_DENSITY` at the top of the script and re-run; it is
+   idempotent and clears its own previous batch. Extinction is exponential, so **doubling the
+   density roughly halves the distance** at which a shape disappears. Change one knob at a time.
+7. Once the number is settled, set **`PLACE_RANGE_MARKERS = False`**, re-run, and save again
+   to remove the ruler.
+
+**Record while you are in there** — both are Step 2 leftovers that were always meant to pair
+with this walkthrough, so they are not measured twice:
+
+- [ ] The settled fog visibility distance (`09_ALLY_NPC.md` still lists **30 m vs 40 m** as
+  open — this closes it). Then update `FAllySimSettings.TakeoverRadius`, which Decision 041
+  says **MUST track fog visibility**
+- [ ] Judge the zone sizes on foot; adjust the heightmap `Profile` table if they read wrong
+- [ ] Zone transit times into `05_ZONES.md` (Step 2's last open item)
+
+**Do NOT blanket-propagate the fog number.** The three constants called "fog" are three
+different distances — `TakeoverRadius` 3500 (35 m), `FInfantrySettings.MaxEngagementRange`
+12000 (120 m), `FMGSettings.VisibilityMaxRange` 50000 (500 m). Only the first tracks player
+visibility. Setting the MG's vision to 35 m **deletes the Zone 1 kill zone**, which sits
+230–310 m from the bunkers and is where `05_ZONES.md` says most deaths happen. The render
+bubble (Decision 042) does not exist yet and cannot be set until the merge lands.
+
+**State on entry**: branch `decision-041-takeover-disc`, two commits ahead of the previous
+state — `e761e38` (Decisions 048–055 + doc edits) and `6b81a8e` (`Tools/PlaceFog.py`). Master
+is behind by both. **No C++ has been written for this arc and none should be until the
+walkthrough returns a number.**
 
 ### The build order (Decision 055) — terrain-first, in this sequence
 
