@@ -19,8 +19,10 @@ Legend: `[x]` done · `[~]` partially done · `[ ]` not started.
   - [x] Sand berms (baked into heightmap), debris piles (Zone 3, placement tool)
   - [x] Exterior of 3 bunkers (Zone 4) — Tools/PlaceHeroPieces.py
   - [x] 3 landing craft with ramps (Zone 0) — Tools/PlaceHeroPieces.py
-- [ ] Fog setup (limit visibility to 30–40m) — DEFERRED until after more system work (2026-07-04)
-- [ ] Walk through it yourself and feel whether the zone sizes are right — DEFERRED with fog
+- [x] Fog setup — **settled at ~35 m**, measured with the range-marker ruler in
+  `Tools/PlaceFog.py` (density 1.0, height falloff 0.05, start distance 500 cm), 2026-09-05
+- [ ] Walk through it yourself and feel whether the zone sizes are right — no longer blocked;
+  the fog walkthrough settled the distance but did not judge the zones
 
 **When done**: Judge whether zone sizes feel appropriate. Adjust if too short or too long.
 **Relevant docs**: 05_ZONES.md

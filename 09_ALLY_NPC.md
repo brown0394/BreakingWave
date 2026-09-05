@@ -126,10 +126,10 @@ Allied deaths must be varied for the battlefield to feel real.
 > trickle, and `MaxAlive` ~300. Despawn is gone too (Decision 050): men who reach the
 > defense line fight there instead of walking off the map.
 
-Player visibility is limited to 30–40m by fog.
+Player visibility is limited to **~35 m** by fog (measured 2026-09-05).
 No need to have 90 NPCs on the full beach at once.
 
-- **Active NPCs within visible range (30–40m)**: 8–12 — *observed target, not maintained*
+- **Active NPCs within visible range (~35 m)**: 8–12 — *observed target, not maintained*
 - ~~Spawn at fog edge, despawn at fog edge~~ — struck, Decision 048
 - ~~Spawn/despawn only outside player's field of view~~ — struck, Decision 048
 
@@ -279,10 +279,12 @@ Data-oriented per Decision 021: one ally NPC system ticks an array of NPC state 
   **and corpses**. Decision 054, 2026-08-29. Static cover is only ~35 positions beach-wide
   against ~105 Cautious men at `MaxAlive` 300, so reservation is mandatory and most Cautious
   men will find nothing and go prone instead — corpses are the only cover that scales
-- [ ] Finalize fog visibility distance (30m? 40m?) — **now load-bearing beyond fog itself**:
-  Decision 041 ties `FAllySimSettings.TakeoverRadius` (currently 3500 uu, the midpoint of
-  the range above) to this number, because the man you take over must be one you could have
-  seen. Update the knob when this settles
+- **SETTLED — fog visibility is ~35 m.** Measured 2026-09-05 by walking the range-marker
+  ruler in `Tools/PlaceFog.py` from profile 510/320 in Zone 1: density 0.5 read out to
+  ~70 m, and doubling it to 1.0 landed on target. `FAllySimSettings.TakeoverRadius` was
+  already 3500 uu, so Decision 041's requirement that it track visibility holds unchanged.
+  **Revisited once** after allies render (Decision 055) — the real test is whether you can
+  see the man you are about to become, which needs Decision 042
 - [ ] Active NPC count cap — target is **~300** under Decision 048; confirm by profiling.
   `MaxAlive` 128 already **binds before a single death** (transit ~120 s at ~325 uu/s wants
   180 men), and Decision 042 bounds cost by *shells* (~25–30), not population. Fog-edge

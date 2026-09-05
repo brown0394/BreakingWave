@@ -30,11 +30,13 @@ FOLDER = "Fog"
 CYLINDER = "/Game/LevelPrototyping/Meshes/SM_Cylinder.SM_Cylinder"
 
 # --- fog knobs -------------------------------------------------------------------------
-# Drafted in 02_STATUS.md, never yet run. Target is ~35 m visibility (09_ALLY_NPC.md still
-# lists 30 m vs 40 m as open - this walkthrough is what settles it).
-# Iterating: extinction is exponential, so DOUBLING density roughly HALVES the distance at
-# which a shape disappears. Change one knob at a time and re-run.
-FOG_DENSITY = 0.5           # the main dial
+# Target is ~35 m visibility (09_ALLY_NPC.md lists 30 m vs 40 m as open - this walkthrough
+# is what settles it). Iterating: extinction is exponential, so DOUBLING density roughly
+# HALVES the distance at which a shape disappears. Change one knob at a time and re-run.
+#
+# Measured, standing at FogRange_STAND_HERE looking inland (profile 510/320, Zone 1):
+#   density 0.5 -> the 60 m post readable, fading out around 70 m. Roughly 2x too clear.
+FOG_DENSITY = 1.0           # the main dial
 FOG_HEIGHT_FALLOFF = 0.05   # low = the fog layer stays thick well above head height
 FOG_MAX_OPACITY = 1.0       # 1.0 = things genuinely vanish rather than staying ghosted
 FOG_START_DISTANCE = 500.0  # cm; keeps the near field clear so held items stay readable
@@ -46,7 +48,7 @@ FOG_COLOR = (0.42, 0.44, 0.47)  # flat overcast grey; "gray, hazy, only shapes v
 # A stand-here post plus numbered posts at known distances inland, so "35 m visibility" is
 # measured instead of guessed: stand at the base post, look inland, note which post is the
 # last one you can make out. Set to False and re-run to remove them once fog is settled.
-PLACE_RANGE_MARKERS = True
+PLACE_RANGE_MARKERS = False
 MARKER_LANE_X = 510         # profile x - the centre lane, between the craft and the bunkers
 MARKER_BASE_Y = 320         # profile y - Zone 1, flat ground, clear sightline inland
 MARKER_RANGES_M = [10, 20, 30, 40, 50, 60, 80, 100]

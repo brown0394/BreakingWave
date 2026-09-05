@@ -6,7 +6,7 @@
 > lives in git log; the why of past choices lives in 03_DECISIONS.md; engine gotchas live
 > in 11_ENGINE_NOTES.md. When updating, replace stale facts instead of appending below them.
 
-## Phase: THE BEACH ARC — Decisions 042–055 all grilled and logged, build order settled. Workstream A is WAITING ON ONE IN-EDITOR RUN (`Tools/PlaceFog.py`). NO C++ WRITTEN FOR THIS ARC YET
+## Phase: THE BEACH ARC — workstream A (fog) is DONE: visibility measured and settled at ~35 m. Workstream B (landscape carve + duplicate-Landscape cleanup) is next. NO C++ WRITTEN FOR THIS ARC YET
 
 The 2026-08-22 direction change stands: **tuning detail on a beach whose systems do not
 exist yet is measuring absence, not balance.** Decisions 042–047 set the shape of the arc
@@ -406,38 +406,35 @@ the render bubble, and `FInfantrySettings`' perception cap) and goes first for t
 
 ## Next Steps
 
-### RESUME HERE — run `Tools/PlaceFog.py` in-editor, then walk the beach
+### RESUME HERE — workstream A is done; B (landscape) is next
 
-Everything below is written and committed. **The one thing standing between this arc and its
-first result is an in-editor run the user does by hand** (spawning crashes headless — see
-`11_ENGINE_NOTES.md`). Nothing else in workstream A can proceed until it happens.
+**Fog is settled at ~35 m** (2026-09-05). `Tools/PlaceFog.py` now runs clean, the calibration
+ruler has been removed, and the level is saved carrying exactly one `ExponentialHeightFog`:
+density **1.0**, height falloff 0.05, max opacity 1.0, start distance 500 cm.
 
-1. Open **`Lvl_FirstPerson`** in the editor.
-2. **Tools > Execute Python Script… > `Tools/PlaceFog.py`**.
-3. **Check the editor log for `fog: could not set '…'` warnings.** The script sets fog
-   properties through a defensive `try_set` that warns rather than aborting, because
-   `ExponentialHeightFogComponent` property names can drift between engine versions. Any
-   property named in a warning was **not** applied and must be set by hand in the Details
-   panel — tell the next session which ones, so the script gets fixed rather than worked around.
-4. **SAVE THE LEVEL.** The infantry pass was nearly lost to a forgotten save; do it now.
-5. **PIE and walk it.** Stand at the post labelled **`FogRange_STAND_HERE`** (profile
-   510/320, Zone 1, flat with a clear run inland). Look inland. The numbered posts are
-   man-height (1.8 m) at **10/20/30/40/50/60/80/100 m**. Note the last one you can still make
-   out — that is the real visibility number, measured rather than guessed.
-6. **Iterate if needed.** Edit `FOG_DENSITY` at the top of the script and re-run; it is
-   idempotent and clears its own previous batch. Extinction is exponential, so **doubling the
-   density roughly halves the distance** at which a shape disappears. Change one knob at a time.
-7. Once the number is settled, set **`PLACE_RANGE_MARKERS = False`**, re-run, and save again
-   to remove the ruler.
+The number was measured rather than guessed. Standing at profile 510/320 in Zone 1 looking
+inland, density 0.5 left the 60 m post readable and fading around 70 m — about 2× too clear —
+and doubling the density halved the distance onto the target, as exponential extinction says
+it should.
 
-**Record while you are in there** — both are Step 2 leftovers that were always meant to pair
-with this walkthrough, so they are not measured twice:
+`FAllySimSettings.TakeoverRadius` was **already** `3500.f` (35 m), so Decision 041's
+requirement that it track fog visibility holds with no code change.
 
-- [ ] The settled fog visibility distance (`09_ALLY_NPC.md` still lists **30 m vs 40 m** as
-  open — this closes it). Then update `FAllySimSettings.TakeoverRadius`, which Decision 041
-  says **MUST track fog visibility**
-- [ ] Judge the zone sizes on foot; adjust the heightmap `Profile` table if they read wrong
-- [ ] Zone transit times into `05_ZONES.md` (Step 2's last open item)
+**Three script defects were found and fixed getting there** (all logged in `11_ENGINE_NOTES.md`,
+commits `7a1baaa` and `81fe91b`): the landscape corner was resolved with
+`isinstance(unreal.Landscape)`, which misses all 64 streaming proxies and picked a degenerate
+duplicate parent, so every marker traced off-map; the script spawned a *second* height fog
+beside the template's, and the renderer only ever draws `ExponentialFogs[0]`, so the tuned fog
+was never the drawn one; and `volumetric_fog` is spelled `enable_volumetric_fog`.
+
+**Still open from workstream A**, carried forward rather than done:
+
+- [ ] **Revisit the fog once** after allies render (Decision 055). The real test is "can I see
+  the man I am about to become", which needs Decision 042's render bubble. ~35 m is good
+  enough to build against, not final
+- [ ] **Judge the zone sizes on foot** — a Step 2 leftover that was meant to ride along with
+  the fog walkthrough and did not happen. Needs another PIE walk
+- [ ] **Record zone transit times into `05_ZONES.md`** — the same, and Step 2's last open item
 
 **Do NOT blanket-propagate the fog number.** The three constants called "fog" are three
 different distances — `TakeoverRadius` 3500 (35 m), `FInfantrySettings.MaxEngagementRange`
@@ -446,22 +443,21 @@ visibility. Setting the MG's vision to 35 m **deletes the Zone 1 kill zone**, wh
 230–310 m from the bunkers and is where `05_ZONES.md` says most deaths happen. The render
 bubble (Decision 042) does not exist yet and cannot be set until the merge lands.
 
-**State on entry**: branch `decision-041-takeover-disc`, two commits ahead of the previous
-state — `e761e38` (Decisions 048–055 + doc edits) and `6b81a8e` (`Tools/PlaceFog.py`). Master
-is behind by both. **No C++ has been written for this arc and none should be until the
-walkthrough returns a number.**
+**State on entry**: branch `decision-041-takeover-disc`. Master is behind by everything from
+`9d08d2f` on. **No C++ has been written for this arc**; B is the next thing to touch, and the
+two landmines in the code-health checklist below are the cheapest things to clear before E.
+
 
 ### The build order (Decision 055) — terrain-first, in this sequence
 
 Only workstream **E** has no playable state. Everything before it is verifiable in PIE with
 today's systems still running.
 
-- [ ] **A — Fog.** `ExponentialHeightFog`, tune by eye for ~35 m visibility: Density ~0.5,
-  Height Falloff ~0.05, Start Distance ~500. Then propagate the settled number into
-  `TakeoverRadius` (Decision 041), the render bubble (042) and `FInfantrySettings`'
-  perception cap. **Revisit once** after allies render — the real test is "can I see the man
-  I am about to become", which needs Decision 042. Do the two Step 2 leftovers in the same
-  walkthrough: judge zone sizes, and record zone transit times into `05_ZONES.md`
+- [x] **A — Fog.** Settled at **~35 m**: density **1.0**, height falloff 0.05, start distance
+  500 cm, one `ExponentialHeightFog` in the level. `TakeoverRadius` already matched at 3500 uu.
+  The render bubble (042) and `FInfantrySettings`' perception cap still await the merge.
+  **Revisit once** after allies render. The two Step 2 leftovers — judge zone sizes, record
+  zone transit times into `05_ZONES.md` — did **not** happen and are still open
 - [ ] **B — Landscape.** Add the trench channel (6 m wide × 1.2 m deep) to
   `GenerateBeachHeightmap.ps1`, regenerate, re-import. **Clean up the three duplicate
   Landscape parent actors in the same pass** — check which owns the 64 streaming proxies
@@ -583,7 +579,8 @@ merge. Each is tagged with the workstream it should ride with.
 ### Numbers still open (all tentative, tune after the systems exist)
 
 Exact craft count and arrival cadence; boatload size; final `MaxAlive`; the trench centerline
-route; ally corpse cap; every spread value; the fog distance itself (30 m vs 40 m).
+route; ally corpse cap; every spread value. The fog distance is **no longer open** — settled
+at ~35 m on 2026-09-05, to be revisited once after allies render.
 
 ### Explicitly OFF the list
 
@@ -649,7 +646,29 @@ so world = profile-meters × 100 − 50400 on both axes. Profile coords below wi
 - Landing craft (Zone 0, ramp faces +Y inland): A-left 230/270 (−27400, −23400), B-center 510/270 (600, −23400), C-right 790/270 (28600, −23400)
 - Bunkers (Zone 4, slit faces −Y sea): MG-left 200/620 (−30400, 11600), MG-center 510/635 (600, 13100), MG-right 800/620 (29600, 11600)
 
-## What Was Done (last session — 2026-08-29)
+## What Was Done (2026-09-05)
+
+**Workstream A closed: the fog number exists.** ~35 m, measured on foot against the
+range-marker ruler rather than guessed, at density 1.0.
+
+- **Three defects in `Tools/PlaceFog.py`**, none of which the script reported as failure.
+  `isinstance(unreal.Landscape)` misses `ALandscapeStreamingProxy` (a sibling, not a subclass)
+  and so saw only the three duplicate Landscape parents, returning degenerate bounds — every
+  range marker traced off the map. The script spawned a second `ExponentialHeightFog` beside
+  the template's, and the renderer hardcodes `Scene->ExponentialFogs[0]` with plain append
+  ordering, so the tuned fog was configured and never drawn. And `volumetric_fog` is
+  `enable_volumetric_fog` — UHT strips the leading `b`
+- **A fourth was self-inflicted and caught before it cost anything**: splitting markers onto
+  their own tag orphaned the previous run's nine posts, which would have stayed on the beach
+  permanently once `PLACE_RANGE_MARKERS` went False
+- `place_fog` now **adopts** the level's single fog actor and destroys redundant ones, rather
+  than spawning alongside. All four traps are in `11_ENGINE_NOTES.md`, which gained a **Fog**
+  section — the landscape-corner one will bite every future placement script
+- **No code change was needed for Decision 041**: `TakeoverRadius` was already 3500 uu
+- Docs: the 30-vs-40 question is deleted from `09_ALLY_NPC.md`, `10_CHECKLIST.md` and this
+  document's open-numbers list
+
+## What Was Done (2026-08-29)
 
 **The grilling that 2026-08-22 left unfinished is finished.** 19 questions (Q9–Q27),
 **Decisions 048–055 logged**, every open branch closed, and the build order settled. Still
