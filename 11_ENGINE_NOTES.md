@@ -39,6 +39,10 @@ weirdness. Each entry cost a failed session or a failed feel-check; none of it i
 - `unreal.HitResult` exposes NO attributes (`hasattr` always False) — `to_tuple()` is the
   only read path: field 0 = blocking_hit, first Vector field = hit location.
 - `unreal.Rotator(a, b, c)` argument order is **(roll, pitch, yaw)** — yaw last.
+- UHT strips the leading `b` from bool UPROPERTYs for the script name: `bEnableVolumetricFog`
+  is `enable_volumetric_fog` in Python, not `volumetric_fog`. Guess wrong and
+  `set_editor_property` raises rather than warning — wrap property sets in a try/report
+  helper so a drifted name is a log line, not an aborted script.
 - BlendSpace `sample_data` AND `blend_parameters` are writable from Python (pass the
   modified list back), and BlendSample has per-sample `rate_scale`. BUT editing sample_data
   does NOT rebuild the serialized runtime triangulation — only `UBlendSpace::ResampleData()`
@@ -131,6 +135,21 @@ weirdness. Each entry cost a failed session or a failed feel-check; none of it i
   knowing before adding any capsule-blocking channel, which would silently shield the player
   behind their own capsule.
 
+## Fog
+
+- **Only ONE `ExponentialHeightFog` is ever drawn per level.** The renderer hardcodes
+  `Scene->ExponentialFogs[0]` (`FogRendering.cpp:221`, `:356`, `MobileFogRendering.cpp:152`),
+  and `FScene::AddExponentialHeightFog` (`RendererScene.cpp:3640`) plain-appends with no
+  priority field and no sorting — registration order decides. The FirstPerson template ships
+  its own fog actor, so a tool that SPAWNS one produces a fully-configured actor that is
+  never drawn and gives no error. `Tools/PlaceFog.py` therefore reduces the level to exactly
+  one fog actor and retunes that, rather than betting on ordering.
+- Volumetric fog **ignores `StartDistance`, `FogMaxOpacity` and `FogCutoffDistance`**
+  (`ExponentialHeightFogComponent.h:124`). The first two are load-bearing here — start
+  distance keeps the near field clear so held items stay readable, max opacity 1.0 makes
+  shapes genuinely vanish instead of ghosting — so enabling volumetric fog silently changes
+  the look with no warning.
+
 ## Level / landscape
 
 - The landscape is CENTERED on the world origin (min corner −50400, −50400) — world =
@@ -139,3 +158,9 @@ weirdness. Each entry cost a failed session or a failed feel-check; none of it i
   pieces by `actor.get_actor_bounds()` + add_actor_world_offset (pivot/rotation agnostic).
 - Line traces for placement: use the editor-world trace context (landscape-actor context
   proved flaky).
+- Detecting the landscape corner: match on **class name substring**, not
+  `isinstance(unreal.Landscape)`. `ALandscapeStreamingProxy` is a SIBLING of `ALandscape`
+  (both derive from `ALandscapeProxy`), so isinstance misses all 64 proxies, and the level
+  carries three duplicate Landscape parents of which only one owns them. First-match then
+  returns a degenerate corner, every placement trace lands off-map, and the symptom is
+  "no ground under X" for every single actor. Take the min over all non-empty bounds.

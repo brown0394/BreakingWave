@@ -25,6 +25,7 @@ import unreal
 
 M = 100.0
 FOG_TAG = "BeachFog"
+MARKER_TAG = "BeachFogMarker"
 FOLDER = "Fog"
 CYLINDER = "/Game/LevelPrototyping/Meshes/SM_Cylinder.SM_Cylinder"
 
@@ -56,11 +57,23 @@ CORNER = {"x": 0.0, "y": 0.0}
 
 
 def landscape_min_corner(eas):
+    # Match on class name, not isinstance(unreal.Landscape): the 64 LandscapeStreamingProxy
+    # actors are siblings of ALandscape rather than instances of it, and the level carries
+    # three duplicate Landscape parents of which only one owns the proxies. Taking the first
+    # match can return a degenerate corner - min across every non-empty one instead.
+    min_x = min_y = None
     for actor in eas.get_all_level_actors():
-        if isinstance(actor, unreal.Landscape):
-            origin, extent = actor.get_actor_bounds(False)
-            return origin.x - extent.x, origin.y - extent.y
-    return None
+        if "Landscape" not in actor.get_class().get_name():
+            continue
+        origin, extent = actor.get_actor_bounds(False)
+        if extent.x <= 0 or extent.y <= 0:
+            continue
+        lo_x, lo_y = origin.x - extent.x, origin.y - extent.y
+        min_x = lo_x if min_x is None else min(min_x, lo_x)
+        min_y = lo_y if min_y is None else min(min_y, lo_y)
+    if min_x is None:
+        return None
+    return min_x, min_y
 
 
 def world_xy(x_m, y_m):
@@ -86,7 +99,7 @@ def ground_z(world, x, y):
 def clear_previous(eas):
     removed = 0
     for actor in eas.get_all_level_actors():
-        if actor.actor_has_tag(FOG_TAG):
+        if actor.actor_has_tag(MARKER_TAG):
             eas.destroy_actor(actor)
             removed += 1
     return removed
@@ -112,19 +125,43 @@ def fog_component(actor):
     return actor.get_component_by_class(unreal.ExponentialHeightFogComponent)
 
 
+def sole_fog_actor(eas):
+    # The renderer reads Scene->ExponentialFogs[0] and ignores every other height fog in the
+    # level (RendererScene.cpp appends in registration order, with no priority or sorting).
+    # The FirstPerson template ships its own ExponentialHeightFog, so spawning a second one
+    # produces an actor that is tuned but never drawn. Reduce the level to exactly one and
+    # retune that, which removes the ordering question entirely rather than betting on it.
+    found = [a for a in eas.get_all_level_actors()
+             if isinstance(a, unreal.ExponentialHeightFog)]
+    if not found:
+        actor = eas.spawn_actor_from_class(
+            unreal.ExponentialHeightFog,
+            unreal.Vector(0.0, 0.0, FOG_ACTOR_Z_M * M),
+            unreal.Rotator())
+        unreal.log("fog: no height fog in the level, spawned one.")
+    else:
+        pre_existing = [a for a in found if a.get_actor_label() != "BeachFog"]
+        actor = pre_existing[0] if pre_existing else found[0]
+        for extra in found:
+            if extra != actor:
+                unreal.log_warning("fog: destroying redundant height fog '%s' - the renderer "
+                                   "only ever draws one." % extra.get_actor_label())
+                eas.destroy_actor(extra)
+        unreal.log("fog: adopted existing height fog '%s' (%d found)."
+                   % (actor.get_actor_label(), len(found)))
+    return actor
+
+
 def place_fog(eas):
-    _, _ = world_xy(0, 0)
-    actor = eas.spawn_actor_from_class(
-        unreal.ExponentialHeightFog,
-        unreal.Vector(0.0, 0.0, FOG_ACTOR_Z_M * M),
-        unreal.Rotator())
+    actor = sole_fog_actor(eas)
     actor.tags = [unreal.Name(FOG_TAG)]
     actor.set_folder_path(FOLDER)
     actor.set_actor_label("BeachFog")
+    actor.set_actor_location(unreal.Vector(0.0, 0.0, FOG_ACTOR_Z_M * M), False, False)
 
     component = fog_component(actor)
     if component is None:
-        unreal.log_error("fog: spawned the actor but found no ExponentialHeightFogComponent.")
+        unreal.log_error("fog: found no ExponentialHeightFogComponent on the fog actor.")
         return actor
 
     colour = unreal.LinearColor(FOG_COLOR[0], FOG_COLOR[1], FOG_COLOR[2], 1.0)
@@ -132,7 +169,7 @@ def place_fog(eas):
     try_set(component, "fog_height_falloff", FOG_HEIGHT_FALLOFF)
     try_set(component, "fog_max_opacity", FOG_MAX_OPACITY)
     try_set(component, "start_distance", FOG_START_DISTANCE)
-    try_set(component, "volumetric_fog", VOLUMETRIC_FOG)
+    try_set(component, "enable_volumetric_fog", VOLUMETRIC_FOG)
     if not try_set(component, "fog_inscattering_luminance", colour):
         try_set(component, "fog_inscattering_color", colour)
     return actor
@@ -161,7 +198,7 @@ def place_markers(eas, world):
         origin, extent = actor.get_actor_bounds(False)
         actor.add_actor_world_offset(
             unreal.Vector(x - origin.x, y - origin.y, gz + extent.z - origin.z), False, False)
-        actor.tags = [unreal.Name(FOG_TAG)]
+        actor.tags = [unreal.Name(MARKER_TAG)]
         actor.set_folder_path(FOLDER + "/RangeMarkers")
         actor.set_actor_label("FogRange_" + label)
         placed += 1
@@ -177,11 +214,17 @@ def main():
         return
     CORNER["x"], CORNER["y"] = corner
 
+    probe_x, probe_y = world_xy(MARKER_LANE_X, MARKER_BASE_Y)
+    unreal.log("fog: landscape corner (%.0f, %.0f); stand-here probe profile (%s, %s) "
+               "-> world (%.0f, %.0f) -> ground z=%r"
+               % (CORNER["x"], CORNER["y"], MARKER_LANE_X, MARKER_BASE_Y,
+                  probe_x, probe_y, ground_z(world, probe_x, probe_y)))
+
     removed = clear_previous(eas)
     place_fog(eas)
     markers = place_markers(eas, world) if PLACE_RANGE_MARKERS else 0
 
-    unreal.log("Fog done. Cleared %d previous, placed 1 ExponentialHeightFog "
+    unreal.log("Fog done. Cleared %d previous markers, tuned 1 ExponentialHeightFog "
                "(density %s, falloff %s, start %s cm) and %d range markers. "
                "SAVE THE LEVEL, then walk it: stand at FogRange_STAND_HERE, look inland, "
                "and note the last post you can make out."
