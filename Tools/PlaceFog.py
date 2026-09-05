@@ -97,9 +97,13 @@ def ground_z(world, x, y):
 
 
 def clear_previous(eas):
+    # FOG_TAG also matches markers left by script versions that predate MARKER_TAG, so sweep
+    # both - minus the fog actor itself, which now carries FOG_TAG and must survive.
     removed = 0
     for actor in eas.get_all_level_actors():
-        if actor.actor_has_tag(MARKER_TAG):
+        if isinstance(actor, unreal.ExponentialHeightFog):
+            continue
+        if actor.actor_has_tag(MARKER_TAG) or actor.actor_has_tag(FOG_TAG):
             eas.destroy_actor(actor)
             removed += 1
     return removed
