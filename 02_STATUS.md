@@ -316,14 +316,17 @@ the render bubble, and `FInfantrySettings`' perception cap) and goes first for t
   - All three 2026-08-11 known gaps are closed by the above
 
 ### Tools
-- [ ] **Tools/PlaceFog.py — WRITTEN AND COMMITTED (6b81a8e), NOT YET RUN IN-EDITOR.**
-  In-editor Python; spawns the `ExponentialHeightFog` from a knob table (density, falloff,
-  max opacity, start distance, colour, volumetric off) plus an optional **calibration ruler**
-  — a `FogRange_STAND_HERE` post at profile 510/320 and man-height posts at
-  10/20/30/40/50/60/80/100 m inland, so visibility is measured rather than guessed. Idempotent
-  (`BeachFog` tag). Fog properties go through a defensive `try_set` that **warns instead of
-  aborting** if a 5.6 property name drifted — read the log on the first run. Set
-  `PLACE_RANGE_MARKERS = False` and re-run to clear the ruler. See RESUME HERE in Next Steps
+- [x] **Tools/PlaceFog.py — run, fixed and settled (2026-09-05).** In-editor Python; tunes the
+  level's `ExponentialHeightFog` from a knob table (density, falloff, max opacity, start
+  distance, colour, volumetric off) plus an optional **calibration ruler** — a
+  `FogRange_STAND_HERE` post at profile 510/320 and man-height posts at 10/20/30/40/50/60/80/100 m
+  inland, which is how the ~35 m number was measured rather than guessed. It **adopts** the one
+  fog actor the renderer draws and destroys redundant ones, rather than spawning alongside;
+  markers carry `BeachFogMarker` and the fog carries `BeachFog`, and `clear_previous` sweeps
+  both. Fog properties go through a defensive `try_set` that **warns instead of aborting** if a
+  5.6 property name drifted. Set `PLACE_RANGE_MARKERS = False` and re-run to clear the ruler
+  (already done). Re-run it to change the fog; the four traps it exposed are in
+  `11_ENGINE_NOTES.md`
 - [x] Tools/GenerateBeachHeightmap.ps1 — generates the zone-profiled heightmap
   (SourceAssets/BeachHeightmap_1009.png); re-run after editing its Profile/Dunes/Berm/Craters tables
 - [x] Tools/PlaceBeachObstacles.py — in-editor Python; spawns grey-box hedgehogs (Zone 2),
@@ -400,8 +403,9 @@ the render bubble, and `FInfantrySettings`' perception cap) and goes first for t
   (PlaceBeachObstacles.py — edit tables, re-run)
 - [x] Hero pieces placed: 3 bunkers (Zone 4), 3 landing craft with ramps (Zone 0)
   (PlaceHeroPieces.py — same workflow)
-- [ ] Fog — **workstream A, IN PROGRESS**: `Tools/PlaceFog.py` is written and
-  committed (6b81a8e) but **has not been run in-editor yet**. See RESUME HERE
+- [x] Fog — **settled at ~35 m visibility** (density 1.0, falloff 0.05, max opacity 1.0, start
+  distance 500 cm). One `ExponentialHeightFog` in the level, adopted from the FirstPerson
+  template's; calibration ruler placed, walked and removed. Revisited once after allies render
 - [ ] Duplicate Landscape parent actors cleanup — pending (see Deferred)
 
 ## Next Steps

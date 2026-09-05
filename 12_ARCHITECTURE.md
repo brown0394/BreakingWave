@@ -221,6 +221,10 @@ placeholder audio and retarget animations. House rules, visible in every script 
 
 - **Idempotent and tag-scoped.** Everything spawned carries a tag (`FOG_TAG`, `MG_TAG`);
   re-running deletes the previous batch first. Iterating a layout is edit-constants-and-rerun.
+  Two edges this pattern hit in `PlaceFog.py`, both worth copying: a script that **adopts** a
+  pre-existing actor rather than spawning one must exclude it from its own sweep, and
+  **renaming a tag strands every actor already carrying the old one** — the sweep has to
+  keep matching the legacy tag or the previous batch becomes permanent.
 - **Coordinate tables live in the script, not in C++.** Decision 052 rejects a compiled node
   table by name: coordinates in two places drift. The trench takes this furthest — one
   hand-authored centreline emits *both* the geometry and the `TrenchNode` actors the soldier

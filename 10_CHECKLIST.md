@@ -39,7 +39,9 @@ Legend: `[x]` done · `[~]` partially done · `[ ]` not started.
 - [x] Sprint body animation reads as running — BS_Idle_Walk_Run rebuilt all-rifle with foot-true rates (Tools/RebuildLocomotionAsRifle.py), feel-checked PASSED 2026-07-18
 - [x] Implement slide-into-prone (momentum slide) — built as a ballistic dive + short skid, feel-check closed as good-enough 2026-07-17
 - [x] Implement headbob (primarily vertical bounce, small amplitude) — Decision 026, feel-checked PASSED 2026-07-18
-- [ ] Run through each zone yourself and measure time — DEFERRED with fog until after base systems (2026-07-18); do together with the fog walkthrough
+- [ ] Run through each zone yourself and measure time — **no longer blocked**: the fog
+  walkthrough happened on 2026-09-05 and settled visibility, but did not take the times.
+  Needs one more PIE walk; pair it with judging the zone sizes
   - [ ] Zone 0 transit time: ___ seconds
   - [ ] Zone 1 transit time: ___ seconds
   - [ ] Zone 2 transit time: ___ seconds
