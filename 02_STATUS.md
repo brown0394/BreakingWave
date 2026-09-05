@@ -57,6 +57,9 @@ the render bubble, and `FInfantrySettings`' perception cap) and goes first for t
 - [x] Ally NPC AI design (09_ALLY_NPC.md) — personality types, density management, corpses, ammo looting
 - [x] Development checklist (10_CHECKLIST.md) — 8-phase dev order, document usage guide
 - [x] Engine gotchas (11_ENGINE_NOTES.md) — UE 5.6 traps for tooling/headless/anim/camera work
+- [x] Code architecture (12_ARCHITECTURE.md) — manager/state-array pattern, engine boundary, shared bullet
+      pipeline, ID-based cross-system refs, editor-Python authoring layer, telemetry; plus what the
+      architecture deliberately is NOT, where it strains, and the invariants to preserve
 - [x] First character narrative draft (landing craft soldier — writer's original)
 
 ### Code (Source/BreakingWave/)
@@ -495,6 +498,87 @@ alongside, and their fire pulls the guns off him. Enemy infantry relocate along 
 and MG crews reinforce up the communication trench. A bunker can go quiet because allies cut
 its communication trench, and the enemy can retake it. Telemetry records enough to tune any
 of it. **Not in this arc**: the ending, the high ground, the enemy-playable side.
+
+### Code-health checklist (architecture read, 2026-09-05)
+
+Found by reading the implementations against Decisions 042–055. **Nothing here is broken
+today** — the counts are small enough that all of it disappears into the frame. It is listed
+because items 8–11 are products of numbers workstreams D and I triple, and items 1–2 are
+one-line changes now that become multi-hour debugging sessions if they are found after the
+merge. Each is tagged with the workstream it should ride with.
+
+**Landmines — fix BEFORE E, they are cheap now and expensive after**
+
+- [ ] **Split `KillAlly` into `KillAlly` / `ClaimAlly`.** `BreakingWavePlayerController.cpp:240`
+  calls `AllySim->KillAlly(Slot)` to remove the man you take over — the same function
+  `MGBunkerSystem.cpp:935` calls when a round kills someone. Harmless while `KillAlly` only
+  flips `bAlive`. **Blocks H**: the moment ally corpses exist (Decision 054's named
+  prerequisite), every takeover drops a body at your feet and you open your eyes standing on
+  your predecessor
+- [ ] **Un-gate soldier behaviour from the shell.** `BeachInfantrySystem.cpp:121` early-returns
+  on `!Soldier.Shell.IsValid()`, so a soldier with no mesh does nothing at all. Decision 042's
+  entire premise is that behaviour is independent of rendering — this is one condition sitting
+  directly under the merge
+
+**Cheap and independent — no dependency on the arc, each verifiable on its own**
+
+- [ ] **Stagger the MG perception clocks.** `FMGBunkerState::EvalTimer` defaults to `0.f`
+  (`MGBunkerSystem.h:346`) and `BeginPlay` never randomises it, so all three guns run their
+  0.4 s perception tick — and all of its traces — on the same frame. This is the same bug
+  class as the 2026-08-02 stop-clock desync (`StartingBeltFractionMin` /
+  `StartingHeatFractionMax`), which exists because identical clocks starting at t=0 made all
+  three guns barrel-change at once. One `FRandRange` in `BeginPlay`
+- [ ] **Rate-limit the ally ground trace, and give it query params.** `AdvanceAlly` →
+  `TraceGroundZ` (`BeachAllySim.cpp:186`) runs a 100 m trace per ally per tick: ~7,700/s at
+  `MaxAlive` 128, ~18,000/s at D's 300. An ally moves ≤9 cm per frame on smooth landscape.
+  Separately the trace passes **no `FCollisionQueryParams`** and uses `ECC_Visibility`, so it
+  snaps allies onto bunkers, beach obstacles and the player — the same failure Decision 041
+  patched on the takeover path with `TakeoverMaxGroundStep`, which the walking path never got
+- [ ] **Move `CountAlliesInDisc` behind the 2 Hz gate.** `MGBunkerSystem.cpp:242` computes it
+  every tick; `FPlaytestRecorder::SamplePlayer` only writes it past `SampleIntervalSeconds`.
+  A full-array scan per frame, ~97% discarded, for telemetry. **Pairs with J**, which already
+  fixes the *semantics* of the same field (the sample omits the `TakeoverForwardReach` filter
+  that the takeover row applies) — do both in one edit
+- [ ] **Promote the scoring scale into `FMGSettings`.** `100.f`, `0.25f/0.75f`, the
+  unseen-target floor `5.f` and the broke-cover `500.f` are literals
+  (`MGBunkerSystem.cpp:421–437`), while `FiredUponScoreBonus` is a `UPROPERTY` whose comment
+  reads "sized to outrank the broke-cover bonus (500)". The tunable and the thing it is
+  balanced against live in different files, one of them uneditable — and only the tunable
+  reaches the settings snapshot. Direct miss against CLAUDE.md's "never scattered literals".
+  Same shape at `BeachInfantrySystem.cpp:316`
+- [ ] **Randomise or round-robin the shared-target scan order.** `IsTargetedByAnotherGun`
+  reads the other guns' already-committed choices, so bunker 0 always picks freely and
+  bunker 2 always eats `SharedTargetScorePenalty`. Deterministic battery priority that
+  nobody chose — an artifact of iterating the array in index order
+
+**Design into E rather than porting — the merge standardises whichever shape it inherits**
+
+- [ ] **Give soldier target selection a cheap gate before the LOS trace.**
+  `SelectSoldierTarget` (`BeachInfantrySystem.cpp:302`) traces once per candidate with only a
+  range check in front of it. The MG rejects most of the beach first with the slit-arc test at
+  `MGBunkerSystem.cpp:352` — one `FindDeltaAngleDegrees`, no trace. Infantry have no
+  equivalent. At I's ~90 defenders against D's ~300 allies that is ~27,000 line traces per
+  evaluation round, every 0.4 s
+- [ ] **Add a broadphase to bullet-vs-soldier.** `UpdateBullets` iterates the full ally array
+  per bullet with only `bAlive` as an early-out — no AABB reject against the travel segment.
+  ~12,800 segment-segment tests per frame today, and **both** multiplicands grow at once:
+  D raises the population, G gives allies rifles
+- [ ] **Slice perception across ticks** rather than shrinking the wave — already the recorded
+  intent in this document's ally-sim entry; E is where it becomes structural
+- [ ] **Size the awareness array safely.** `MGBunkerSystem.cpp:135` sets
+  `AwarenessSlots = AllySim->GetSettings().MaxAlive + 1` at `BeginPlay`, and `AwarenessFor`
+  has no bounds check. Fine while the ally array is fixed-size at `BeginPlay`; silently
+  out-of-bounds the moment **D**'s boatload arrival wants to grow it at runtime
+
+**Watch, no action yet**
+
+- [ ] **The 60 s pre-warm is a synchronous load hitch.** `AAllySimManager::BeginPlay` runs 240
+  `SimulateStep` iterations, each walking the living population with its ground trace —
+  roughly 10k traces on the game thread at level load, scaling linearly with `MaxAlive`.
+  Fixing the trace rate above mostly removes this; re-measure after D
+- [ ] **The controller caches nothing.** `TryTakeover` runs three separate `TActorIterator`
+  sweeps per death while every manager caches its peers at `BeginPlay`. Free at
+  once-per-40-seconds — listed as an inconsistency, not a cost
 
 ### Numbers still open (all tentative, tune after the systems exist)
 

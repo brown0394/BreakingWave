@@ -15,6 +15,7 @@
 | `09_ALLY_NPC.md` | Allied NPC personality types, density/corpse management, ammo looting |
 | `10_CHECKLIST.md` | 8-phase development order with per-step goals and document assignments |
 | `11_ENGINE_NOTES.md` | UE 5.6 gotchas — headless/editor-Python patterns, anim/retarget traps, camera/input/rendering quirks |
+| `12_ARCHITECTURE.md` | Code architecture — manager/state-array pattern, engine boundary, shared bullet pipeline, tooling layer, and why each was chosen |
 
 ## When to Read Each Document
 
@@ -24,6 +25,7 @@
 
 ### Read once at the start of a new session (design alignment)
 - **`04_PRINCIPLES.md`** — 7 principles that govern every code and design choice. Read first if starting fresh work.
+- **`12_ARCHITECTURE.md`** — how the code is organised and why. Read before writing or restructuring any system code.
 
 ### Read when a past decision is unclear or being reconsidered
 - **`03_DECISIONS.md`** — Prevents re-litigating settled questions. Check here before proposing something that might already be decided.
@@ -45,6 +47,7 @@
 | Design discussion (not just coding) | `01_SOUL.md`, `03_DECISIONS.md` + relevant docs |
 | Checking what to build next | `10_CHECKLIST.md`, `02_STATUS.md` |
 | Editor-Python tools, headless asset work, retargeting, camera/input C++ | `11_ENGINE_NOTES.md` |
+| Adding a system, refactoring, or deciding where new code belongs | `12_ARCHITECTURE.md`, `04_PRINCIPLES.md` |
 
 ## Key Constraints to Remember
 
