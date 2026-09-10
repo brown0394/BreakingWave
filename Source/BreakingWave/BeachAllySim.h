@@ -144,7 +144,12 @@ public:
 
 	void GetAimPoints(const FSimAlly& Ally, FVector OutPoints[3]) const;
 
+	/** Killed by fire. Decision 054's ally corpses hang off this and nothing else. */
 	void KillAlly(int32 Index);
+
+	/** Taken over by the player: the slot empties because the man became the pawn, not because he died.
+	    Distinct from KillAlly so that a takeover never drops a body at the feet of the man you just became. */
+	void ClaimAlly(int32 Index);
 
 	/** Decision 041: the man you take over is inside TakeoverRadius of where you fell — a live one picked at
 	    random if the disc holds any, otherwise one spawned at the disc's edge, which nobody can see happen

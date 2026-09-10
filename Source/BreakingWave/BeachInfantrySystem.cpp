@@ -56,6 +56,8 @@ void AInfantryManager::BeginPlay()
 	{
 		FInfantrySoldierState Soldier;
 		Soldier.Shell = *It;
+		Soldier.Position = It->GetActorLocation();
+		Soldier.FacingYaw = It->GetActorRotation().Yaw;
 		Soldier.RoundsInMag = Settings.Rifle.MagazineSize;
 		StartCover(Soldier, FMath::FRandRange(0.f, Settings.CoverWaitMax));
 		Soldiers.Add(Soldier);
@@ -118,7 +120,7 @@ void AInfantryManager::Tick(float DeltaSeconds)
 
 void AInfantryManager::UpdateSoldier(FInfantrySoldierState& Soldier, int32 Index, float DeltaSeconds)
 {
-	if (!Soldier.bAlive || !Soldier.Shell.IsValid())
+	if (!Soldier.bAlive)
 	{
 		return;
 	}
@@ -212,6 +214,8 @@ void AInfantryManager::UpdateSoldier(FInfantrySoldierState& Soldier, int32 Index
 	default:
 		break;
 	}
+
+	SyncSoldierShell(Soldier);
 }
 
 void AInfantryManager::StartCover(FInfantrySoldierState& Soldier, float ExtraWait)
@@ -280,13 +284,10 @@ void AInfantryManager::FireSoldierRound(FInfantrySoldierState& Soldier, int32 In
 	}
 	PlaySoldierAnim(Soldier, FireAnim, false);
 
-	if (Soldier.Shell.IsValid())
+	const FVector Flat = FVector(AimDir.X, AimDir.Y, 0.f).GetSafeNormal();
+	if (!Flat.IsNearlyZero())
 	{
-		const FVector Flat = FVector(AimDir.X, AimDir.Y, 0.f).GetSafeNormal();
-		if (!Flat.IsNearlyZero())
-		{
-			Soldier.Shell->SetActorRotation(Flat.Rotation());
-		}
+		Soldier.FacingYaw = Flat.Rotation().Yaw;
 	}
 }
 
@@ -362,12 +363,12 @@ bool AInfantryManager::IsSoldierAlive(int32 Index) const
 
 bool AInfantryManager::GetSoldierBodySegment(int32 Index, FVector& OutBottom, FVector& OutTop, float& OutRadius) const
 {
-	if (!Soldiers.IsValidIndex(Index) || !Soldiers[Index].bAlive || !Soldiers[Index].Shell.IsValid())
+	if (!Soldiers.IsValidIndex(Index) || !Soldiers[Index].bAlive)
 	{
 		return false;
 	}
 	const FInfantrySoldierState& Soldier = Soldiers[Index];
-	const FVector Feet = Soldier.Shell->GetActorLocation();
+	const FVector Feet = Soldier.Position;
 	const bool bRisen = Soldier.Phase == EInfantryPhase::Aiming || Soldier.Phase == EInfantryPhase::Firing
 		|| Soldier.Phase == EInfantryPhase::Rising;
 	const float Height = bRisen ? Settings.RisenBodyHeight : Settings.CoverBodyHeight;
@@ -395,11 +396,11 @@ void AInfantryManager::NotifySoldierHit(int32 Index, const FVector& HitPoint)
 		Body->SetSimulatePhysics(true);
 	}
 
-	const FVector DeathPos = Soldier.Shell.IsValid() ? Soldier.Shell->GetActorLocation() : HitPoint;
+	const FVector DeathPos = Soldier.Position;
 	for (FInfantrySoldierState& Other : Soldiers)
 	{
-		if (&Other != &Soldier && Other.bAlive && Other.Shell.IsValid()
-			&& FVector::Dist(Other.Shell->GetActorLocation(), DeathPos) < Settings.ComradeDeathFlinchRadius)
+		if (&Other != &Soldier && Other.bAlive
+			&& FVector::Dist(Other.Position, DeathPos) < Settings.ComradeDeathFlinchRadius)
 		{
 			FlinchSoldier(Other);
 		}
@@ -410,8 +411,8 @@ void AInfantryManager::NotifyImpactNear(const FVector& ImpactPoint)
 {
 	for (FInfantrySoldierState& Soldier : Soldiers)
 	{
-		if (Soldier.bAlive && Soldier.Shell.IsValid()
-			&& FVector::Dist(Soldier.Shell->GetActorLocation(), ImpactPoint) < Settings.FlinchRadius)
+		if (Soldier.bAlive
+			&& FVector::Dist(Soldier.Position, ImpactPoint) < Settings.FlinchRadius)
 		{
 			FlinchSoldier(Soldier);
 		}
@@ -460,11 +461,7 @@ FVector AInfantryManager::GetTargetVelocity(int32 TargetId) const
 
 FVector AInfantryManager::SoldierEyePosition(const FInfantrySoldierState& Soldier) const
 {
-	if (!Soldier.Shell.IsValid())
-	{
-		return FVector::ZeroVector;
-	}
-	return Soldier.Shell->GetActorLocation() + FVector(0.f, 0.f, Settings.RisenEyeHeight);
+	return Soldier.Position + FVector(0.f, 0.f, Settings.RisenEyeHeight);
 }
 
 bool AInfantryManager::HasLineOfSight(const FInfantrySoldierState& Soldier, const FVector& TargetPoint) const
@@ -484,6 +481,15 @@ bool AInfantryManager::HasLineOfSight(const FInfantrySoldierState& Soldier, cons
 		}
 	}
 	return false;
+}
+
+void AInfantryManager::SyncSoldierShell(const FInfantrySoldierState& Soldier) const
+{
+	if (!Soldier.Shell.IsValid())
+	{
+		return;
+	}
+	Soldier.Shell->SetActorLocationAndRotation(Soldier.Position, FRotator(0.f, Soldier.FacingYaw, 0.f));
 }
 
 void AInfantryManager::PlaySoldierAnim(FInfantrySoldierState& Soldier, UAnimSequence* Anim, bool bLoop, float FitToSeconds)
@@ -528,11 +534,7 @@ void AInfantryManager::DrawDebugState() const
 #if ENABLE_DRAW_DEBUG
 	for (const FInfantrySoldierState& Soldier : Soldiers)
 	{
-		if (!Soldier.Shell.IsValid())
-		{
-			continue;
-		}
-		const FVector Pos = Soldier.Shell->GetActorLocation() + FVector(0.f, 0.f, 220.f);
+		const FVector Pos = Soldier.Position + FVector(0.f, 0.f, 220.f);
 		const TCHAR* PhaseName = TEXT("?");
 		switch (Soldier.Phase)
 		{

@@ -1,12 +1,12 @@
 # Current Status
 
-> Last updated: 2026-08-29
+> Last updated: 2026-09-10
 >
 > This document holds the CURRENT state and what's next — nothing else. Session history
 > lives in git log; the why of past choices lives in 03_DECISIONS.md; engine gotchas live
 > in 11_ENGINE_NOTES.md. When updating, replace stale facts instead of appending below them.
 
-## Phase: THE BEACH ARC — workstream A (fog) is DONE: visibility measured and settled at ~35 m. Workstream B (landscape carve + duplicate-Landscape cleanup) is next. NO C++ WRITTEN FOR THIS ARC YET
+## Phase: THE BEACH ARC — workstream A (fog) is DONE: visibility measured and settled at ~35 m. The two pre-merge landmines are CLEARED. Workstream B (landscape carve + duplicate-Landscape cleanup) is next
 
 The 2026-08-22 direction change stands: **tuning detail on a beach whose systems do not
 exist yet is measuring absence, not balance.** Decisions 042–047 set the shape of the arc
@@ -447,9 +447,9 @@ visibility. Setting the MG's vision to 35 m **deletes the Zone 1 kill zone**, wh
 230–310 m from the bunkers and is where `05_ZONES.md` says most deaths happen. The render
 bubble (Decision 042) does not exist yet and cannot be set until the merge lands.
 
-**State on entry**: branch `decision-041-takeover-disc`. Master is behind by everything from
-`9d08d2f` on. **No C++ has been written for this arc**; B is the next thing to touch, and the
-two landmines in the code-health checklist below are the cheapest things to clear before E.
+**State on entry**: branch `master`, which now carries everything through `4b86397` — the
+`decision-041-takeover-disc` work landed and no other branch exists. B is the next thing to
+touch; the two landmines in the code-health checklist below were cleared on 2026-09-10.
 
 
 ### The build order (Decision 055) — terrain-first, in this sequence
@@ -507,18 +507,19 @@ because items 8–11 are products of numbers workstreams D and I triple, and ite
 one-line changes now that become multi-hour debugging sessions if they are found after the
 merge. Each is tagged with the workstream it should ride with.
 
-**Landmines — fix BEFORE E, they are cheap now and expensive after**
+**Landmines — CLEARED 2026-09-10, both before E as intended**
 
-- [ ] **Split `KillAlly` into `KillAlly` / `ClaimAlly`.** `BreakingWavePlayerController.cpp:240`
-  calls `AllySim->KillAlly(Slot)` to remove the man you take over — the same function
-  `MGBunkerSystem.cpp:935` calls when a round kills someone. Harmless while `KillAlly` only
-  flips `bAlive`. **Blocks H**: the moment ally corpses exist (Decision 054's named
-  prerequisite), every takeover drops a body at your feet and you open your eyes standing on
-  your predecessor
-- [ ] **Un-gate soldier behaviour from the shell.** `BeachInfantrySystem.cpp:121` early-returns
-  on `!Soldier.Shell.IsValid()`, so a soldier with no mesh does nothing at all. Decision 042's
-  entire premise is that behaviour is independent of rendering — this is one condition sitting
-  directly under the merge
+- [x] ~~Split `KillAlly` into `KillAlly` / `ClaimAlly`~~ — DONE. `AAllySimManager::ClaimAlly`
+  exists alongside `KillAlly`, and `BreakingWavePlayerController.cpp:240` calls it. Both bodies
+  are identical today (`bAlive = false`) and that is the point: **H hangs the ally corpse off
+  `KillAlly` and nothing else**, so a takeover leaves no body at the feet of the man you became
+- [x] ~~Un-gate soldier behaviour from the shell~~ — DONE, and it was not one condition.
+  Position was authoritative **on the shell actor**, so eleven sites read
+  `Shell->GetActorLocation()`. `FInfantrySoldierState` now owns `Position` and `FacingYaw`,
+  captured from the shell at `BeginPlay`; every behaviour site reads the struct, and one
+  `SyncSoldierShell` pushes state to the actor for rendering. A shell-less soldier now aims,
+  fires, flinches and can be hit. No behaviour change today — shells always exist at
+  `BeginPlay`, and the level authors yaw-only rotations, so the sync is faithful
 
 **Cheap and independent — no dependency on the arc, each verifiable on its own**
 
@@ -649,6 +650,33 @@ The landscape is CENTERED on the world origin: its min corner sits at world (−
 so world = profile-meters × 100 − 50400 on both axes. Profile coords below with world uu in parens.
 - Landing craft (Zone 0, ramp faces +Y inland): A-left 230/270 (−27400, −23400), B-center 510/270 (600, −23400), C-right 790/270 (28600, −23400)
 - Bunkers (Zone 4, slit faces −Y sea): MG-left 200/620 (−30400, 11600), MG-center 510/635 (600, 13100), MG-right 800/620 (29600, 11600)
+
+## What Was Done (2026-09-10)
+
+**Both pre-merge landmines cleared, and nothing else touched.** Workstream B was not started;
+the trench-centerline ordering question is still open (see the build order below).
+
+- **`ClaimAlly` split out of `KillAlly`** (`BeachAllySim.h/.cpp`). Two identical bodies on
+  purpose — the split exists so that H can hang the ally corpse off `KillAlly` alone. The
+  takeover path (`BreakingWavePlayerController.cpp:240`) is the only `ClaimAlly` caller; the
+  shared bullet loop (`MGBunkerSystem.cpp:935`) is the only `KillAlly` caller
+- **Soldier behaviour un-gated from the shell** (`BeachInfantrySystem.h/.cpp`). The checklist
+  called this "one condition sitting under the merge". It was really a **position ownership**
+  problem: `Shell->GetActorLocation()` WAS the soldier's authoritative position, read at eleven
+  sites, so deleting the early-return alone would have left every unrendered soldier fighting
+  from the world origin. `FInfantrySoldierState` now carries `Position` and `FacingYaw`, seeded
+  from the shell at `BeginPlay`, and `SyncSoldierShell` is the single write back to the actor.
+  Decision 042's premise — behaviour independent of rendering — now holds structurally instead
+  of by comment
+- **No behaviour change is expected today.** `BeginPlay` still builds the array by iterating
+  `AInfantrySoldier`, so a shell always exists, and `PlaceInfantryPositions.py` authors
+  yaw-only rotations, so the per-tick sync reproduces exactly what the fire-time
+  `SetActorRotation` did
+- **The editor target compiles clean. NOT yet run in PIE** — that is the next thing to do, and
+  the check is only that the seven Zone 3 riflemen still rise, fire, flinch and ragdoll as before
+- **Loose end left on purpose**: `NotifySoldierHit`'s `HitPoint` parameter is now unused — it
+  was only the fallback for a shell-less death position. Kept because a ragdoll impulse and H's
+  corpse placement both want it; delete it if H turns out not to
 
 ## What Was Done (2026-09-05)
 

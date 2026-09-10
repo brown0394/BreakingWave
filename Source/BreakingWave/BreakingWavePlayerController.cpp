@@ -237,7 +237,7 @@ bool ABreakingWavePlayerController::TryTakeover()
 	const FVector GroundPosition = Ally.Position;
 	const float HeadingYaw = Ally.HeadingYaw;
 	const bool bStartProne = Ally.Stance == ESimAllyStance::Prone;
-	AllySim->KillAlly(Slot);
+	AllySim->ClaimAlly(Slot);
 
 	const ACharacter* PawnDefaults = TakeoverPawnClass->GetDefaultObject<ACharacter>();
 	const float HalfHeight = PawnDefaults != nullptr

@@ -140,7 +140,12 @@ struct FInfantrySoldierState
 {
 	GENERATED_BODY()
 
+	/** Rendering only. Behaviour reads Position and FacingYaw, so a soldier with no mesh still fights (Decision 042). */
 	TWeakObjectPtr<class AInfantrySoldier> Shell;
+
+	FVector Position = FVector::ZeroVector;
+
+	float FacingYaw = 0.f;
 
 	EInfantryPhase Phase = EInfantryPhase::Cover;
 
@@ -254,6 +259,8 @@ private:
 	void SelectSoldierTarget(FInfantrySoldierState& Soldier);
 
 	void FlinchSoldier(FInfantrySoldierState& Soldier);
+
+	void SyncSoldierShell(const FInfantrySoldierState& Soldier) const;
 
 	bool IsTargetAlive(int32 TargetId) const;
 

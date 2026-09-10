@@ -220,6 +220,14 @@ void AAllySimManager::KillAlly(int32 Index)
 	}
 }
 
+void AAllySimManager::ClaimAlly(int32 Index)
+{
+	if (Allies.IsValidIndex(Index))
+	{
+		Allies[Index].bAlive = false;
+	}
+}
+
 int32 AAllySimManager::AcquireTakeoverAlly(const FVector& DeathPoint, bool& bOutManufactured, int32& OutDiscCandidates)
 {
 	bOutManufactured = false;
