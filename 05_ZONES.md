@@ -26,7 +26,7 @@ Zone 1: Waterline (Kill Zone)
   - Concentrated fire from all 3 bunkers
 ─────────────────────────────────
 Zone 0: Landing Point
-  - Landing Craft A (left), B (center), C (right)
+  - 7–9 landing craft ~75 m apart (3 greybox hulls placed today)
 ─────────────────────────────────
 [Sea]
 ```
@@ -35,11 +35,9 @@ Zone 0: Landing Point
 
 ### Zone 0 — Landing (5~15 seconds)
 Starts the moment the landing craft ramp drops. Wade from water to beach.
-**7–9 craft roughly 75 m apart** across the frontage (Decision 048, raised from 3 at 280 m)
-— your starting craft determines your lane up the beach. Craft **sail in, ground, drop the
-ramp, disgorge ~25–30 men and back off** (Decision 049); they are a running cycle, not
-scenery. The three-column spawn geography that left 130–140 m of the beach empty is what
-this replaces.
+**7–9 craft roughly 75 m apart** across the frontage (Decision 048) — your starting craft
+determines your lane up the beach. Craft **sail in, ground, drop the ramp, disgorge ~25–30 men
+and back off** (Decision 049); they are a running cycle, not scenery.
 
 ### Zone 1 — Waterline, Kill Zone (10~30 seconds)
 Zero cover. Crossfire from bunker MGs. Most deaths happen here.
@@ -97,7 +95,8 @@ Tactical relief baked into the heightmap (tables/constants at the top of the scr
 
 - The trench channel in Zone 4 — 6 m wide × 1.2 m deep, carved from
   `Tools/TrenchCenterline.json` rather than from a table in the generator. See **The Trench**
-  below. **Carved into the PNG 2026-09-10; not yet re-imported, so the level has no trench yet**
+  below. Carved into the PNG 2026-09-10; whether the level has been re-imported is in
+  `02_STATUS.md`
 
 Zone lengths are first guesses. Walk the grey-box (Step 1), then adjust the
 Profile table at the top of the script, re-run it, and re-import.
@@ -132,8 +131,10 @@ Measured on the generated heightmap, 2026-09-10:
   rather than a trench; judge it on the walk
 - **Known wart**: Zone 4's lateral noise amplitude (~1.0–1.8 m) is the size of the trench itself,
   so the lip varies **0.61 m to 1.71 m** against a nominal 1.2 m. In a trough the trench barely
-  lowers a man, which is what Decision 045's exposure gain depends on. Unfixed by choice — the
-  remedy damps the noise in a corridor along the line and so smooths already-walked beach
+  lowers a man, which is what Decision 045's exposure gain depends on. Unfixed by choice, and to
+  be decided on the trench walk. The fix is ~3 lines in the generator — damp the noise amplitude
+  in a corridor (~15 m) either side of the centerline so the lip stays near 1.2 m — but it
+  smooths a 30 m band of already-walked beach along the defense line
 
 ### Re-import verification table
 
@@ -171,11 +172,10 @@ Placed in Zones 0~2. People advancing up the beach.
 2~3 candidates per zone. Random selection from nearby candidates based on death zone.
 If all candidates in a zone are dead, expand to adjacent zone candidates.
 
-> **Superseded in shape by Decision 038 (2026-08-11)** for the system being built now:
-> "nearby" is a **±20 m window in Y around the death point, at any X across the beach
-> width** — not a zone band, which at 60–100 m deep is looser than intended. Candidates
-> are anonymous live ally-sim slots, not authored characters; the authored registry
-> above waits on narrative volume.
+> **What is built (Decisions 038, 041)**: the next character is an anonymous live ally within
+> **~35 m (fog range) of where you fell**, and no more than 20 m further forward — or a man
+> manufactured at the edge of that disc if nobody is in it. Candidates are ally-sim slots, not
+> authored characters; the authored registry above waits on narrative volume.
 
 ### German Character Pool
 Placed in Zones 3~4. People looking down at the beach.

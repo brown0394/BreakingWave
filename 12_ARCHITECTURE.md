@@ -316,7 +316,7 @@ Stated plainly so the next session does not rediscover it:
    slice perception across ticks, do not shrink the wave.
 
 The actionable form of this section — 13 items, each tagged with the workstream it
-should ride with — is the **Code-health checklist** in `02_STATUS.md` Next Steps.
+should ride with — is the **Code-health checklist** in `02_STATUS.md`.
 
 ## Invariants to preserve
 

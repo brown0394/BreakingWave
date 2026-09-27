@@ -50,7 +50,9 @@ Per potential target, a visibility score:
 - **Off-axis attention falloff** — vision is sharpest along the current muzzle direction and
   fades toward the edges of the slit arc (hard limit). Off the gun's axis, you are genuinely
   unseen — flanking works.
-- **Distance factor** — closer is easier to notice; fog caps the whole thing.
+- **Distance factor** — closer is easier to notice. Fog caps it, but not at the player's ~35 m:
+  the guns must still reach the Zone 1 kill zone 230–310 m away, so `FMGSettings.VisibilityMaxRange`
+  stays far longer than player visibility.
 
 Score over threshold → target enters the gunner's **awareness set**, with a short memory after
 sight is lost (he suppresses the crater you ducked into, then forgets). The priority ladder
@@ -147,8 +149,12 @@ The combinations that arise from this independence create a different experience
 ## Infantry
 
 ### Overview
-- Zone 3: 2 soldiers each in left and right foxholes, 3 in the central trench line. ~7 total.
-- Zone 4: Additional infantry around bunkers and communication trenches.
+- **Built**: 7 in Zone 3 — 2 in each flank foxhole on the MG seam lanes, 3 in the centre
+  (Decision 036).
+- **Planned (Decision 055)**: ~90 defenders — ~45 in the fire trench, 7 in the forward outposts,
+  18 MG crew (garrison-6 × 3), ~20 in the reinforcement pool — clustered as **strongpoints at the
+  bunkers and thin at the seams**. The trade is the point: a machine gun up the bunker lane,
+  riflemen up the seam.
 - "Personal threat" — unlike the MG, these are individuals who recognize and aim at the player.
 - Enemies the player can shoot and eliminate. Threats where "something I can do" exists.
 
@@ -172,11 +178,8 @@ Repeat
 
 ### Position Movement
 
-> STATUS 2026-08-09: the first infantry pass (Decision 036) ships the fire cycle + a
-> flinch layer (near impacts / comrade death → early drop, longer wait) but NOT this
-> section — relocation is deliberately deferred and stays on the build list
-> (02_STATUS.md deferred section). Until then a ducked soldier re-emerges in the same
-> spot; that known exploit is the trigger for building this.
+> Not built. It arrives with workstream F: soldiers walk the trench waypoint graph (Decision
+> 046). Until then a ducked soldier re-emerges in the same spot, and pre-aim wins the duel.
 
 Infantry don't stay in one spot. They relocate periodically.
 
@@ -189,6 +192,8 @@ Infantry don't stay in one spot. They relocate periodically.
 - **Hit after firing** — If they rise to shoot and get hit, they re-emerge from a different spot
 - **Comrade killed** — If an adjacent soldier dies, they move to fill the gap and cover the angle
 - **Enemy approach** — Fall back if Allies get too close
+- **Blocked shot** (Decision 053) — a friendly in the line of fire: hold up to ~3 s, then prefer
+  moving to a free adjacent node over rising and firing
 
 **Movement rules:**
 - No firing while moving
@@ -213,6 +218,16 @@ Graduated by distance. Lower overall than MG, but threatening up close.
 - Threat removed from that position → advance possible → feeling of "capturing"
 - Dead enemy infantry may be the next playable character
 - The person the player shot could be whose inner voice they read later
+
+### The Trench and the Breakthrough (Decisions 046, 047, 050, 051)
+
+- The Zone 4 breakthrough is **going through the trench** to the bunkers' rear doors. Topology
+  and geometry: `05_ZONES.md`, *The Trench*.
+- MG crews **reinforce up the communication trench**, so killing crew through the slit buys
+  silence, not a permanent kill.
+- Allies can break into the trench. A cleared section stays cleared for a while and the bunker
+  it feeds goes quiet when reinforcement cannot reach it; then the enemy retakes it. The global
+  ending stays the player's.
 
 ---
 
@@ -277,8 +292,9 @@ Data-oriented per Decision 021: managers tick arrays of state structs; actors ar
 ### Infantry AI
 - One infantry system ticks an array of soldier state structs; soldier actors carry mesh, animation, and ragdoll
 - State cycle per soldier: cover → (check triggers) → move or rise → aim → fire → cover
-- Movement trigger checks: impact detection (hit event within radius), comrade death event, enemy distance check
-- NavMesh path requests for movement (inside trench / position)
+- Movement trigger checks: impact detection (hit event within radius), comrade death event, enemy distance check, blocked shot
+- Movement is A* over the trench waypoint graph, built at `BeginPlay` from tagged `TrenchNode`
+  actors, with destination nodes reserved — no navmesh, no `AIController` (Decisions 046, 052, 053)
 - Accuracy: distance-based base value × random variance
 
 ---
@@ -287,30 +303,7 @@ Data-oriented per Decision 021: managers tick arrays of state structs; actors ar
 
 - [ ] MG max rotation speed value — tune in prototype
 - [ ] Belt size / heat-per-shot / cooling rate / jam chance / crew-tier multipliers — tune through testing
-- **SETTLED — infantry count and layout**: ~**90 defenders** total — ~45 in the fire trench,
-  7 in the forward outposts, 18 MG crew (Decision 027's garrison-6 × 3), ~20 in the
-  reinforcement pool. Distributed as **strongpoints at the bunkers, thin at the seams**, not
-  uniformly. Decision 055, 2026-08-29. Sized from fog rather than guessed: 35 m visibility
-  puts ~70 m of line in view, so 1 man per 10–15 m means you see 5–7 defenders together, and
-  it gives a 3:1 attacker ratio against ~300 allies. The trade this creates is the point —
-  **a machine gun up the bunker lane, riflemen up the seam**
 - [ ] Infantry aiming time value — tune through testing
-- [ ] Infantry inter-position movement frequency and condition details — the *mechanism* is
-  settled (Decision 046: they walk the trench waypoint graph, which also absorbs Decision
-  036's deferred relocation layer 3). Frequency and trigger conditions are still open.
-  Decision 053 adds one trigger for free: a soldier whose shot is blocked by a friendly holds
-  ~3 s, then prefers moving to a free adjacent node over rising and firing
+- [ ] Infantry movement frequency and trigger thresholds — the mechanism is the trench graph
+  (Decision 046); how often and on what conditions is still open
 - [ ] Allied NPC behavior when enemy is playable
-- **SETTLED — Zone 4 bunker breakthrough mechanic**: you go through the trench to reach the
-  bunkers, entering through the rear door the greybox already has. Decision 046, 2026-08-22.
-  Crews reinforce up the communication trench (Decision 047), so killing crew through the
-  slit is suppression rather than a permanent kill
-- **SETTLED — trench topology**: one continuous **fire trench at profile y ≈ 600**, the three
-  bunkers as strongpoints behind it at y 620/635, **three communication trenches** back to the
-  bluff at y ≈ 690, and the three Zone 3 positions staying forward at y 550–560 on the MG seam
-  lanes, joined by saps. Decision 051, 2026-08-29. Verified against Decision 045's symmetry:
-  the guns clear a ducked man in the fire trench by +3.3 m (flank) and +3.8 m (centre), and
-  clear a standing outpost head by +2.6 m
-- **SETTLED — allies can take trench sections**: a cleared section stays cleared for a while
-  and the bunker it feeds goes quiet when reinforcement cannot reach it, then the enemy
-  retakes it. The *global* ending stays the player's. Decision 050, 2026-08-29

@@ -42,7 +42,7 @@ All information is conveyed through sensation.
 | Head | Instant death | One shot, one kill. Meaningless death. |
 | Torso (1st hit) | Wounded | Enters wounded state. One more shot = death. |
 | Torso (2nd hit) | Death | — |
-| Limbs | Minor | Subtle feedback. Not fatal. Repeated hits can trigger wounded state. |
+| Limbs | Wounded, for now | Built like the torso: every non-head hit wounds (Decision 039). A lighter limb tier is still open. |
 
 ### Wounded State — Expressed Without UI
 
@@ -55,6 +55,11 @@ The player knows they've been hit through these sensations:
 - Vision intermittently blurs
 
 Wounded state does not recover. Once hit, that character fights wounded until death.
+
+**Not built, deliberately.** Decision 039 landed the wounded *state* (one counter) and deferred
+this presentation. Measured on 2026-08-22: first wound → death has a median of **0.17 s**, 9 of
+12 under one second, so a vignette or blur would never be seen. If a wounded *phase* is ever
+wanted, the lever is MG burst discipline, not presentation.
 
 ### Ammo — Expressed Without UI
 
@@ -71,7 +76,7 @@ Wounded state does not recover. Once hit, that character fights wounded until de
 | Cover | Location | Protection Level | Notes |
 |-------|----------|-----------------|-------|
 | None (open ground) | Zones 0–1 | No cover | Run or go prone |
-| Shell craters | Zone 1 | Partial cover | Only 1–2. Not safe — just a brief pause. |
+| Shell craters | Zone 1 | Partial cover | 3 deep ones; ~10 shallow ones are dressing (`05_ZONES.md`). Not safe — just a brief pause. |
 | NPC corpses | Zones 1–3 | Penetration attenuation | Not full stop. See below. |
 | Czech hedgehogs | Zone 2 | Partial block | Metal obstacles. Gaps allow hits. |
 | Sand berms | Zone 3 | Good cover | Prone behind them nearly blocks all. Enemy uses them too. |
@@ -124,7 +129,7 @@ but bullets from the right bunker come from a different angle and bypass it.
 - Bad luck means death before the ramp finishes dropping
 
 ### Zone 1 — Kill Zone (10–30 seconds)
-- Cover: 1–2 shell craters, fallen corpses
+- Cover: 3 deep shell craters, fallen corpses
 - Actions: running, prone, rolling into craters
 - No firing possible — enemy is too far and there's no time to aim
 - All three bunkers' crossing fire overlaps here. Most lethal zone.
@@ -172,8 +177,8 @@ A comrade in the next foxhole screams. The far end of the communication trench g
 
 ## Open Questions
 
-- [ ] Exact number of limb hits required to enter wounded state
-- [ ] Exact number and placement of shell craters in Zone 1
+- [ ] Whether limbs get a lighter tier than the torso, and how many limb hits wound. On 2026-08-17,
+  38% of all wounds landed on a hand, foot, forearm or calf
 - [ ] Czech hedgehog hit detection — gap probability vs. physics
 - [ ] Barbed wire crossing mechanic — time cost? increased hit risk?
 - [ ] Whether artillery strike events exist (environmental threat)

@@ -1,53 +1,45 @@
 # BreakingWave — CLAUDE.md
 
-## Document Index
+A first-person game about one beach landing, played as a chain of the people who die on it.
+UE 5.6 + C++. Two-person team: writer/developer + Claude.
 
-| File | Contents |
-|------|----------|
-| `01_SOUL.md` | Game vision, core emotions, confirmed decisions, priorities, open questions |
-| `02_STATUS.md` | Current phase, what exists, what's done, next steps |
-| `03_DECISIONS.md` | Logged decisions with reasoning (why, not just what) |
-| `04_PRINCIPLES.md` | 7 design principles — the "why" behind code and design choices |
-| `05_ZONES.md` | Beach map, 5-zone layout, character pool structure, gaze-crossing examples |
-| `06_COMBAT.md` | Player controls, damage model, cover system, combat rhythm per zone |
-| `07_CAMERA.md` | Headbob, hit camera, death camera, narrative screen, transition system |
-| `08_ENEMY_AI.md` | MG bunker AI (priority targeting, accuracy, stops), infantry AI, difficulty curve |
-| `09_ALLY_NPC.md` | Allied NPC personality types, density/corpse management, ammo looting |
-| `10_CHECKLIST.md` | 8-phase development order with per-step goals and document assignments |
-| `11_ENGINE_NOTES.md` | UE 5.6 gotchas — headless/editor-Python patterns, anim/retarget traps, camera/input/rendering quirks |
-| `12_ARCHITECTURE.md` | Code architecture — manager/state-array pattern, engine boundary, shared bullet pipeline, tooling layer, and why each was chosen |
+## Loaded every session
 
-## When to Read Each Document
+- Vision, priorities, what this game is not: @01_SOUL.md
+- The 7 principles behind every code and design choice: @04_PRINCIPLES.md
+- Current phase, RESUME HERE, the build order, open work: @02_STATUS.md
 
-### Always read at the start of every session
-- **`01_SOUL.md`** — Without this, all direction is lost. Core premise, priorities, what this game is NOT.
-- **`02_STATUS.md`** — Current phase and next steps. Never assume; always check.
+## Other documents — read when the task calls for it
 
-### Read once at the start of a new session (design alignment)
-- **`04_PRINCIPLES.md`** — 7 principles that govern every code and design choice. Read first if starting fresh work.
-- **`12_ARCHITECTURE.md`** — how the code is organised and why. Read before writing or restructuring any system code.
+| File | Holds | Read before |
+|------|-------|-------------|
+| `03_DECISIONS.md` | Every decision with its reasoning; an index with each entry's state at the top | Proposing anything that might already be decided, and any design discussion. Read the index, then only the entries you need |
+| `05_ZONES.md` | Map, zones, heightmap, the trench, character pools | Level layout, terrain, cover placement, the trench; character pools and gaze-crossing; narrative perspective |
+| `06_COMBAT.md` | Controls, damage, cover, combat rhythm per zone | Hits, damage, wounded state, corpse cover, ammo |
+| `07_CAMERA.md` | Headbob, hit camera, death camera, narrative screen, transition | Movement feel, any camera work, death → narrative → transition |
+| `08_ENEMY_AI.md` | MG bunkers, infantry, difficulty curve | Any enemy behaviour |
+| `09_ALLY_NPC.md` | Ally personalities, density, corpses, ammo looting | Any ally behaviour, corpses, looting |
+| `10_CHECKLIST.md` | The original 8-step development order | Long-range ordering. The current build order is the arc in `02_STATUS.md` |
+| `11_ENGINE_NOTES.md` | UE 5.6 traps: headless Python, anim/retarget, camera/input C++, fog, landscape | Editor-Python tools, headless asset work, retargeting, camera/input C++, a landscape re-import |
+| `12_ARCHITECTURE.md` | How the code is organised and why; invariants | Writing, restructuring or deciding where to put any system code |
 
-### Read when a past decision is unclear or being reconsidered
-- **`03_DECISIONS.md`** — Prevents re-litigating settled questions. Check here before proposing something that might already be decided.
+## Commands
 
-### Read based on the task at hand
+PowerShell. `$UE` = `C:\Program Files\Epic Games\UE_5.6\Engine`; `$Proj` = the absolute path of
+`BreakingWave.uproject`. Before any build or asset-writing run, check `Get-Process *Unreal*`: a
+zombie headless editor breaks both saves (silently) and the link (LNK1104).
 
-| Task | Read These |
-|------|-----------|
-| Movement, headbob, prone, slide | `07_CAMERA.md` |
-| Hit detection, damage, wounded state, death | `06_COMBAT.md`, `07_CAMERA.md` |
-| Death camera, narrative screen, transition | `07_CAMERA.md` |
-| MG bunker AI, accuracy, stops | `08_ENEMY_AI.md` |
-| Infantry AI, enemy behavior | `08_ENEMY_AI.md` |
-| Allied NPC behavior, types, spawning | `09_ALLY_NPC.md` |
-| Corpse system, ammo looting | `09_ALLY_NPC.md`, `06_COMBAT.md` |
-| Level layout, zone geometry, cover placement | `05_ZONES.md` |
-| Character pools, gaze-crossing logic | `05_ZONES.md`, `01_SOUL.md` |
-| Narrative writing, character perspective | `01_SOUL.md`, `05_ZONES.md` |
-| Design discussion (not just coding) | `01_SOUL.md`, `03_DECISIONS.md` + relevant docs |
-| Checking what to build next | `10_CHECKLIST.md`, `02_STATUS.md` |
-| Editor-Python tools, headless asset work, retargeting, camera/input C++ | `11_ENGINE_NOTES.md` |
-| Adding a system, refactoring, or deciding where new code belongs | `12_ARCHITECTURE.md`, `04_PRINCIPLES.md` |
+- **Build**: `& "$UE\Build\BatchFiles\Build.bat" BreakingWaveEditor Win64 Development -project="$Proj" -WaitMutex`
+- **Headless Python** (asset work, no UI): `& "$UE\Binaries\Win64\UnrealEditor-Cmd.exe" "$Proj" -run=pythonscript -script="<absolute .py path>" -stdout -unattended -nosplash`
+- **Offscreen full editor** (retargeting and other UI-touching batch ops): same executable with `-ExecutePythonScript="<absolute .py path>" -stdout -unattended -nosplash -RenderOffscreen`
+- **Placement scripts** (`Tools/Place*.py`, `Tools/CleanDuplicateLandscapes.py`) are editor-only — spawning actors crashes headless — so the user runs them in the open editor
+- **Heightmap**: `Tools\GenerateBeachHeightmap.ps1` (no arguments) writes `SourceAssets\BeachHeightmap_1009.png`
+- **Playtest analysis**: `Tools\AnalyzePlaytests.bat` — runs the analyzer on UE's bundled Python, where matplotlib is installed; system `python` is only the Store stub. Set `$env:PYTHONIOENCODING = 'utf-8'` first until workstream J fixes the cp949 crash
+
+Headless gotchas: pass `-script` an absolute path (a relative one resolves against the engine's
+Binaries folder). Exit code 1 does not mean failure — any asset that logs an error sets it, and
+every sound import logs a harmless BINKA-decoder ensure. Judge a run by its Error summary and the
+`.uasset` timestamp, verified from a fresh process (`11_ENGINE_NOTES.md`).
 
 ## Key Constraints to Remember
 
@@ -68,4 +60,9 @@
 - **No comments in code**: Write readable code through clear naming only. Do not add inline comments or docstrings unless the why is genuinely non-obvious and cannot be expressed by naming alone.
 - **Data-oriented over object-oriented**: Prefer flat data structures, arrays of structs, and systems that operate on data in bulk. Avoid deep inheritance hierarchies, virtual dispatch, and encapsulation for its own sake. Design around what data exists and how it flows, not around objects and their behavior.
   - UE framework boundary classes (GameMode, PlayerController, Pawn, Character) are fine — fighting the engine is not the goal. The rule governs game systems: prefer one manager ticking an array of state structs over per-NPC AIControllers, Behavior Trees, and Blackboards. See Decision 021.
-- **Update the docs when work completes**: After finishing meaningful work, update `02_STATUS.md` (phase, what exists, next steps). Log new decisions in `03_DECISIONS.md`. Record tuned values in the doc that `10_CHECKLIST.md` names for that step. When a decision settles an open question, delete that question from every doc that lists it.
+- **Update the docs when work completes**:
+  - `02_STATUS.md` is loaded into every session: **replace** stale lines rather than appending, keep it under ~150 lines, and put the session story in the commit message, not the doc.
+  - Log new decisions in `03_DECISIONS.md` and add a row to its index. When a decision supersedes or amends an earlier one, add a one-line note under the earlier entry and update its index row.
+  - Record tuned values in the doc that `10_CHECKLIST.md` names for that step.
+  - When a decision settles an open question, delete the question from every doc that lists it. Don't leave "SETTLED" or struck-through entries behind; state the result once, where it belongs.
+  - Give each fact one home and point to it from elsewhere. Refer to code by symbol name, not file:line.

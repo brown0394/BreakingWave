@@ -130,6 +130,11 @@ Narrative ends
 
 ### Starting State by Zone
 
+**What is built (Decision 040 part 4)**: the new character inherits the taken-over ally's heading,
+stance and forward motion rather than a per-zone script — the simulation is the truth of the
+world. The table below is what those states should look like once allies render; the Zone 0 row
+needs the craft cycle (Decision 049).
+
 | Zone | New Character State | What's Visible |
 |------|-------------------|----------------|
 | Zone 0 | Inside landing craft. Ramp about to drop. | The back of the person ahead, grey sky, spray |
@@ -164,26 +169,42 @@ German → back to Allied:
 
 ## UE Implementation Notes
 
-### Death Camera
-- On death trigger, PlayerController switches camera control to a custom CameraActor.
-- Lerp camera position/rotation to target point (near ground) over time.
-- Terrain clip prevention: LineTrace downward from camera position; ground + 15cm is the lower bound.
-- Control post-process volume parameters via Timeline (vignette, blur, desaturation).
+### Death Camera (built, Decision 040)
+- `ABreakingWavePlayerController` runs the whole sequence as a phase machine in `PlayerTick`:
+  DeathShake → DeathDescend → DeathHold → FadeOut → [narrative screen, zero duration today] →
+  takeover → FadeIn.
+- The view switches to a spawned `ACameraActor` driven by scripted math, never the ragdoll: a
+  decaying rattle, an ease-out descent to a downward-traced floor, and a roll toward the side the
+  round was travelling.
+- Deferred: vision blur and narrowing (needs a post-process material) and the audio low-pass.
+  Audio fades with the screen instead, through `StartCameraFade`'s `bFadeAudio`.
 
-### Transition System
-- New character Pawn is pre-spawned and active before the transition.
-- On transition, PlayerController Possesses the new Pawn.
-- Fade-in: Lerp camera post-process Scene Color Tint from black to white.
-- Enemy targeting delay: tag the new Pawn, exclude from AI target filter for 1–2 seconds.
+### Transition System (built, Decisions 040–041)
+- The new pawn is spawned and possessed at the **end** of the fade-out, taking over a live ally,
+  so the man is alive at the instant you become him. The old pawn becomes a ragdoll corpse,
+  capped at `MaxCorpses`, oldest retired first.
+- Fades use `StartCameraFade`.
+- Targeting delay is clocked from pawn spawn: MG awareness is zeroed and blocked, so the guns must
+  re-acquire through the normal perception ramp; infantry exclude the player outright. Rounds
+  already in flight stay live.
 
-### Headbob
-- BUILT (2026-07-17, Decision 026): UHeadbobShakePattern, a custom camera-shake pattern —
-  vertical sine at footfall rate + half-rate lateral sway, amplitude AND frequency bound
-  to movement speed, breathing when stationary, near-zero prone, still while
-  airborne/sliding/transitioning. Knobs in FHeadbobSettings on the character; values
-  tentative until feel-checked.
-- Wounded state (noise-based irregular offset) NOT built — waits for the damage system;
-  it slots in as more pattern state in UpdateShakePatternImpl.
+### Headbob (built, Decision 026)
+- `UHeadbobShakePattern`, a custom camera-shake pattern: vertical sine at footfall rate plus
+  half-rate lateral sway, amplitude and frequency bound to speed, breathing when stationary,
+  near-zero prone, still while airborne, sliding or transitioning.
+- The wounded pattern is not built — the damage state exists (Decision 039), the presentation is
+  deferred. It slots in as more pattern state in `UpdateShakePatternImpl`.
+
+### Built values (tentative; feel-checked 2026-07-18 and 2026-08-17)
+- **Headbob** (`FHeadbobSettings` on the character): 1.5 cm at 2.8 Hz at walk (600), 2.5 cm at
+  3.4 Hz at sprint (900), zero below walk; `LateralRatio` 0.4 (0 = the vertical-only
+  motion-sickness fallback); breathing 0.3 cm at 0.35 Hz, × 0.4 prone; `SmoothingTime` 0.2 s.
+  The camera rides the head socket, so animation already moves it — if the bob reads weak, raise
+  the amplitudes first.
+- **Death → control** (`FTransitionSettings` on the controller): shake 0.3 s, descend 1.2 s,
+  hold 0.5 s, fade-out 0.5 s — 2.5 s from death to the new pawn — then a 1.25 s locked fade-in,
+  3.75 s in all. `GroundClearance` 18 cm, `TiltDegrees` 22°. Targeting delay is
+  `FadeInSeconds + TargetingDelaySeconds` (1.5) — 2.75 s from spawn, 1.5 s of it after control.
 
 ---
 
@@ -191,8 +212,6 @@ German → back to Allied:
 
 - [ ] Narrative screen Option A vs B — decide after prototype comparison test
 - [ ] Narrative text progression — auto vs. manual (button)
-- [ ] Exact headbob amplitude/period values — tune through testing
-- [ ] Death camera fall speed curve — tune through testing
-- [ ] Exact enemy targeting delay duration (1 second? 2?) — tune through testing
-- [ ] Exact fade-in/out duration — tune through testing
+- [ ] Tune headbob, death-camera, fade and targeting-delay values by feel — current values are
+  under *Built values* above
 - [ ] Level of control over what's visible in the final death frame — fully random? slightly guided?

@@ -2,6 +2,72 @@
 
 Records decisions and their reasoning. To prevent future "why did we do this?"
 
+## Index
+
+Read this first, then only the entries you need (search for `### 0NN`). **State**: *Rule* — a
+design stance with nothing to build · *Built* · *Not built* — settled, not implemented yet ·
+*Design only* — part of the beach arc, not built · *Open* — undecided. When a later decision
+changes an earlier one, the earlier entry carries a one-line note and its row says so here.
+
+| # | Decision | State | Changed by / notes |
+|---|----------|-------|--------------------|
+| 001 | Do not force death locations | Rule | |
+| 002 | The "chain of gazes" structure | Rule | |
+| 003 | Keep scope small: a two-person team | Rule | |
+| 004 | Unreal Engine + C++, first-person handheld | Built | |
+| 005 | A foggy day with no time progression | Built | Fog ~35 m, 2026-09-05 |
+| 006 | Narratives are pre-written static text | Rule | |
+| 007 | The next character is random from the pool | Built | As an anonymous takeover (038, 041) |
+| 008 | The game ends on the high-ground breach; no lose condition | Not built | 050 keeps the ending the player's |
+| 009 | Both sides are playable | Not built | |
+| 010 | Important NPCs can die; pools stay generous | Rule | |
+| 011 | Two-shot + body-part damage, no UI | Built | 039 — no limb tier yet |
+| 012 | Shell craters in Zone 1 | Built | |
+| 013 | Corpse cover uses physics penetration | Not built | 054 makes corpses cover points |
+| 014 | The death camera is semi-scripted | Built | 040 |
+| 015 | Narrative screen: compare options A and B | Open | |
+| 016 | Transition protection is a targeting delay, not invincibility | Built | 040 part 5 |
+| 017 | The MG tracks by priority, not a sweep | Built | 033 |
+| 018 | Factor-based MG accuracy; three stop types | Built | 028 simulates the stops |
+| 019 | No weapon looting; ammo only when empty | Not built | |
+| 020 | The player cannot answer wounded NPCs | Rule | |
+| 021 | NPC systems are data-oriented managers | Built | |
+| 022 | Landscape import scale 100/100/200 | Built | |
+| 023 | Prone rides the engine crouch; jump removed | Built | Amended: jump shims removed 2026-07-18; 025 |
+| 024 | Debug keys via `DebugExecBindings` | Built | |
+| 025 | Prone is stationary | Built | |
+| 026 | Headbob is one camera-shake pattern | Built | |
+| 027 | The MG is a crewed weapon, 6-man garrison | Built | 047 adds reinforcement |
+| 028 | MG stops are simulated from belt and heat | Built | |
+| 029 | The allied wave is an unrendered simulation | Built | 043 merges it into one soldier system |
+| 030 | MG rounds are simulated projectiles | Built | 035 shares the array with every shooter |
+| 031 | MG perception: exposure × attention × distance | Built | |
+| 032 | Flank MGs fire enfilade, toed in 30° | Built | |
+| 033 | Three manned MGs; movement draws fire; no double-targeting | Built | |
+| 034 | The near-line blind seam is by design | Rule | 051 and 055 put the outposts on it |
+| 035 | Rifle first: one system, two data profiles | Built | Joint tuning batch cancelled (044) |
+| 036 | Zone 3 infantry first pass | Built | Relocation → 046; Zone 4 infantry → 051, 055 |
+| 037 | The enemy rifle has its own voice | Built | |
+| 038 | Death hands you a nearby live ally | Built | Parts 3 and 5 superseded by 041; part 7 by 050 |
+| 039 | Two-shot damage; the mesh is the hit volume | Built | |
+| 040 | Death → takeover sequence; a new pawn each life | Built | |
+| 041 | Takeover is a fog-radius disc | Built | Verified 2026-08-22; part 6 superseded by 048 |
+| 042 | The simulation is a level of detail | Design only | |
+| 043 | Allies and enemy infantry become one soldier system | Design only | Workstream E |
+| 044 | Ally fire is real, zone-gated and conspicuous | Design only | |
+| 045 | Nobody shoots through their own, symmetrically | Design only | Open question closed by 053 |
+| 046 | Trenches are navigable; the trench is the way in | Design only | Amended by 050, 051, 052 |
+| 047 | MG crews reinforce through the communication trench | Design only | |
+| 048 | Ally supply is emergent: no director, more craft, boatloads | Design only | |
+| 049 | The craft cycle is simulated; manufacture stays | Design only | |
+| 050 | Allies break into the trench; sections fall and are retaken | Design only | |
+| 051 | Trench topology | Design only | Route carved into the heightmap by 056 |
+| 052 | The trench is carved and scripted; the centerline is the artifact | Design only | Carve built by 056; parapet and nodes not |
+| 053 | Fire discipline: a failed check, geometric asymmetry, muzzle lift | Design only | |
+| 054 | Ally accuracy row; full personalities; corpses as cover | Design only | |
+| 055 | Strongpoints; the arc is built terrain-first | Design only | The build order in `02_STATUS.md` |
+| 056 | The centerline is authored before the carve | Built | Headless half; re-import pending |
+
 ---
 
 ### 001 — Do not force death locations
@@ -125,6 +191,7 @@ Records decisions and their reasoning. To prevent future "why did we do this?"
 
 ### 023 — Prone rides the engine crouch machinery; jumping removed from input
 - **Date**: 2026-07-05
+- **Amended 2026-07-18**: the template touch-UI jump nodes were deleted in-editor and the `DoJumpStart`/`DoJumpEnd` shims removed with them. Decision 025 made prone stationary, which removes `ProneSpeed`.
 - **Decision**: Prone is implemented as UE's crouch (instant capsule shrink to `ProneCapsuleHalfHeight`, `MaxWalkSpeedCrouched = ProneSpeed`, built-in stand-up clearance check), with the first-person mesh offset down so the camera sits `ProneEyeHeight` above the ground. C toggles it (Tools/AddProneInput.py wires IA_Prone; originally LeftControl, rebound 2026-07-15 — Ctrl is too hard to hit while sprinting with LeftShift+W). The jump input binding is deleted; `DoJumpStart`/`DoJumpEnd` remain as empty shims only because BP_FirstPersonCharacter's template touch-UI graph still calls them.
 - **Reason**: The design has prone but no crouch, so the engine's crouch slot is free — reusing it gets capsule resize, encroachment checks, and movement-component integration for near-zero code, consistent with "fighting the engine is not the goal" (Decision 021). The camera must be lowered manually because it rides the head socket and there are no prone animations in greybox. Jumping is excluded by design (06_COMBAT.md).
 - **Considered alternative**: Hand-rolled prone state (own capsule resize + clearance traces) — re-implements crouch with more surface for bugs; only needed if crouch is ever added as a separate stance.
@@ -197,12 +264,14 @@ Records decisions and their reasoning. To prevent future "why did we do this?"
 
 ### 035 — The rifle precedes more MG tuning, as one shared system with two data profiles
 - **Date**: 2026-08-09
+- **Amended 2026-08-22**: the joint MG + infantry `PlayerTargetScoreMultiplier` tuning batch is **cancelled**, not deferred. Decision 044's muzzle-flash conspicuity makes the player's score situational rather than a flat multiplier, and Decisions 043–055 change every input to it. The multiplier stays coded at 3.0, untuned.
 - **Decision**: After the whizz feel-check passed, the next build is not MG tuning but firing: one rifle system whose rounds ride the existing MG bullet pipeline (bullets carry a source faction), used by the player now and enemy infantry immediately after — two `FRifleProfile` data rows, player semi-auto/8-round, defenders bolt-action/5-round with an audible bolt-cycle pause. Player scope: hip fire AND aimed fire (RMB: FOV narrows, movement locks, tight spread), magazine + manual reload + dry click with infinite reserve mags (looting economy stays deferred), no crosshair ever, Step 4's sway/wounded effects excluded. Player bullets: down an infantryman in one hit, kill MG crew through the slit (existing takeover/degradation governs the consequence), pass through unrendered sim allies. Priority ladder rung 1 goes live: player rounds landing within FiredUponAlertRadius of a gun (or hitting crew) give that gun a decaying score bonus on the player, broke-cover-shaped. The MG PlayerTargetScoreMultiplier knob (2026-08-06 finding) is CODED but deliberately untuned — it gets tuned together with infantry in one batch, not twice.
 - **Reason**: User call: intensity needs people shooting at people, not another MG knob pass. A shared system means the defenders and the Step 7 playable enemy inherit the same code as data; the bullet pipeline gives every rifle round crack/whizz/impact and telemetry for free; and tuning the priority knob before infantry existed would have meant re-tuning it after.
 - **Considered alternative**: Threat-only infantry first (no rifle) — rejected: Z3 would feel-check as one-way death, mis-measuring the zone the same way free-sprint mis-measured beach length; and slit-sniping vs rung-1 is the risk/reward the bunker counterplay needs.
 
 ### 036 — Z3 infantry first pass: fire cycle + flinch, parapet greybox, relocation deferred
 - **Date**: 2026-08-09
+- **Amended 2026-08-22/29**: nothing here stays deferred. Relocation (layer 3) arrives with Decision 046's trench graph, since a soldier who can walk it can sidestep and re-emerge elsewhere; the pre-aim exploit predicted below showed up in the 2026-08-22 batch. Zone 4 infantry becomes the defense line of Decisions 051 and 055, and the dug-in terrain becomes Decision 052's carve.
 - **Decision**: Seven soldiers (2 per flank foxhole on the between-bunker seam lanes, 3 in a center trench line) as one manager ticking soldier structs; visual shells are mannequin actors with real retargeted AnimStarterPack crouch/rise/aim/fire anims (user chose real anims over puppet motion) and persistent ragdoll death. Cycle: cover → rise → aim delay → 1–3 bolt shots → drop → randomized wait, per-soldier variance. Flinch layer: player fire impacting near a risen soldier, or a comrade dying nearby, drops him early and stretches his next wait — suppression works even when you miss. Targeting reuses the MG scoring approach (distance × movement bonus × player multiplier) against player + sim allies, gated by a MaxEngagementRange knob standing in for fog. Positions are above-grade parapet greybox from an idempotent placement tool (PlaceInfantryPositions.py tables double as spawn data); dug-in terrain versions wait for the visual pass. DEFERRED, to build later: relocation (layer 3 — intra-trench sidesteps, re-emerge elsewhere, fall back), Z4 infantry (goes with communication trenches + breakthrough design).
 - **Reason**: Decision 034 made Z3 infantry the designed owner of the near-line blind seam; two batches showed the beach too safe. The flinch layer is nearly free on the cycle's states and is the difference between turrets that pop up and people who get scared. Parapets keep position iteration table-driven instead of heightmap round-trips. Without relocation a ducked soldier re-emerges in the same spot — pre-aim wins every duel; accepted for greybox, and it is the argument for when relocation earns its build.
 - **Considered alternative**: Fuller Step 6 spec with relocation now — most build for the least first-feel-check value; puppet visuals — rejected by user.
@@ -216,6 +285,7 @@ Records decisions and their reasoning. To prevent future "why did we do this?"
 ### 038 — Death hands you a nearby living ally: mechanical loop first, ±20 m depth window, anonymous slots
 - **Date**: 2026-08-11
 - **Status**: COMPLETE — grilling finished 2026-08-16 (Q5–Q12). Parts 1–4 below were settled 2026-08-11; parts 5–7 close out the selection rule. The rest of the spec became Decisions 039 and 040.
+- **Superseded in part**: parts 3 and 5 (the ±20 m slab at any X, and the rear-expansion ladder) were replaced on 2026-08-17 by **Decision 041**'s 35 m disc around the death point, with a man manufactured at its edge when it is empty. Part 4's "death must never gift ground" survives as 041's +20 m forward clamp. Part 7's `DespawnY` is removed outright by **Decision 050** (design only). Parts 1, 2 and 6 stand.
 - **Decision**: Seven parts, all user calls.
   1. **Mechanical loop first, narrative screen later.** This pass builds death camera → fade → take over a live ally → targeting delay → control returns. The narrative screen is a state in the transition state machine that currently lasts zero seconds; the full Step 5 chain (written text, Option A vs B screen comparison) drops into that seam afterwards without a rewrite.
   2. **The person you become is anonymous.** Takeover picks a live `FSimAlly` slot and stamps the new life with a character ID that is just slot + `Generation`. No authored candidate registry, no narrative binding, therefore no pool exhaustion and effectively infinite lives — accepted deliberately, because it is also what makes Z3 and Z4 reachable for the first time. The seat is reserved: the handoff takes a slot index, so a registry can bolt on later.
@@ -249,6 +319,7 @@ Records decisions and their reasoning. To prevent future "why did we do this?"
 
 ### 041 — Takeover is a fog-radius disc, and the ally population triples
 - **Date**: 2026-08-17
+- **Status**: BUILT 2026-08-17, verified in PIE 2026-08-22: takeover distance median 27 m, max 35 m; lateral median 7.9 m; give-back median 18.8 m; no placement failures. The fog re-check asked for below is **closed**: fog was measured at ~35 m on 2026-09-05 and `TakeoverRadius` was already 3500. Part 6's `MaxAlive` 128 is superseded by **Decision 048** (~300, design only).
 - **Decision**: Six parts. The rule in one sentence: **the next man is within fog range of where you fell — a real one if there was one, a manufactured one if there wasn't.**
   1. **The search is a disc, not a slab.** Live allies within `TakeoverRadius` (3500 uu ≈ 35 m) of a frozen 2D death anchor, no candidate further forward than `TakeoverForwardReach` (+20 m), random among them. The radius is the fog-visibility bar: the next pair of eyes must have belonged to someone you could have *seen*.
   2. **Empty disc: manufacture a man at its edge**, at a uniformly random angle, Y-clamped to +20 m forward. `09_ALLY_NPC.md` §119–120 already licenses this — spawn and despawn happen at the fog edge, never in plain sight — and the screen is black through the handover anyway. He is a normal `FSimAlly` spawned via `SpawnAllyAt`, so he is targetable, killable and generation-counted like anyone else; only the walk/prone roll is added explicitly, because `SpawnAlly` hard-codes `Advancing`.

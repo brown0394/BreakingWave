@@ -158,6 +158,9 @@ weirdness. Each entry cost a failed session or a failed feel-check; none of it i
   pieces by `actor.get_actor_bounds()` + add_actor_world_offset (pivot/rotation agnostic).
 - Line traces for placement: use the editor-world trace context (landscape-actor context
   proved flaky).
+- The level saves **one file per actor** under
+  `Content/__ExternalActors__/FirstPerson/Lvl_FirstPerson/`. To verify that a placement run was
+  saved, check those files' timestamps from outside the editor — the in-editor view proves nothing.
 - **Re-importing the heightmap — do the duplicate-parent cleanup FIRST.** The level carries three
   `ALandscape` parents (`Landscape`, `Landscape2`, `Landscape4`, all at −50400/−50400) and only one
   owns the 64 streaming proxies. Re-importing while all three exist means picking the right one by
