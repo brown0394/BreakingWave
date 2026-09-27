@@ -158,6 +158,33 @@ weirdness. Each entry cost a failed session or a failed feel-check; none of it i
   pieces by `actor.get_actor_bounds()` + add_actor_world_offset (pivot/rotation agnostic).
 - Line traces for placement: use the editor-world trace context (landscape-actor context
   proved flaky).
+- **Re-importing the heightmap — do the duplicate-parent cleanup FIRST.** The level carries three
+  `ALandscape` parents (`Landscape`, `Landscape2`, `Landscape4`, all at −50400/−50400) and only one
+  owns the 64 streaming proxies. Re-importing while all three exist means picking the right one by
+  eye, and picking wrong is silent. Run `Tools/CleanDuplicateLandscapes.py` (report-first; it
+  refuses to delete on an unclear report), save, and only then re-import — one unambiguous target.
+  Decision 052 calls cleanup and re-import "the same pass"; this is the order within it.
+  - The import must match what the PNG is: **1009×1009, 16-bit grayscale, scale X=100 Y=100
+    Z=200** (Decision 022 — Z=200 was chosen because profile-true heights at Z=100 read as flat
+    in first person). Getting Z wrong rescales the whole beach, not just the new feature.
+  - Encoding, for checking a trace by hand: `world Z (uu) = (grey − 32768) × 1.5625` at Z scale
+    200, which is exactly `metres × 100`. 64 grey steps = 1 m.
+  - **Verify with traces at known coordinates, not by eye** — a failed or mis-scaled import still
+    looks like a beach. `05_ZONES.md` carries a 16-row table of world coordinates and expected Z
+    for the trench anchors; the bluff and bunker-door rows are the most diagnostic because they
+    sit on the steepest ground.
+  - The exact menu path in 5.6 is **not recorded here** — whoever does the next re-import should
+    write it into this bullet, since it has now been needed three times (initial, craters, trench).
+- **Carving features into the heightmap: the lateral noise is the same size as the feature.**
+  At 1009×1009 and scale 100, 1 pixel is 1 m, and the `Profile` table's third column is a noise
+  amplitude that reaches ~1.8 m in Zone 4. A 1.2 m trench cut into that reads as a 0.6 m scrape
+  where it crosses a noise trough and a 2.8 m gully where it crosses a peak, so any carved feature
+  under ~2 m must suppress the noise inside itself or it will not survive. Two traps follow:
+  subtracting a constant depth on sloping ground **cants the floor** (0.28 m/m across a 6 m
+  channel is 1.7 m of sideways tilt) — sample the floor height at the nearest centerline point
+  instead; and measuring the result as "difference from the previous heightmap" is useless once
+  noise is suppressed, because the suppression itself moves height by more than the carve does.
+  Measure against the smooth grade, and take cross-sections **perpendicular** to the feature.
 - Detecting the landscape corner: match on **class name substring**, not
   `isinstance(unreal.Landscape)`. `ALandscapeStreamingProxy` is a SIBLING of `ALandscape`
   (both derive from `ALandscapeProxy`), so isinstance misses all 64 proxies, and the level

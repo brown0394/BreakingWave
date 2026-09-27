@@ -18,9 +18,26 @@
 #   - bluff line wavers laterally +/-15 m from Zone 3 inland (BluffWaviness)
 #   - shell craters with raised rims, mostly Zone 1 (Craters table): 3 deep ones are the only
 #     cover in the kill zone (scarce by design), ~10 shallow ones are bombardment dressing
+#   - the trench channel in Zone 4 (fire trench, 3 communication trenches, 3 saps), carved from
+#     TrenchCenterline.json rather than from a table in this file - the same centerline drives
+#     the trench placement script, so geometry and navigation cannot disagree (Decision 052)
 # All numbers tentative per CLAUDE.md - edit the tables/constants below and re-run.
 
-param([string]$OutputPath = (Join-Path (Split-Path $PSScriptRoot -Parent) "SourceAssets\BeachHeightmap_1009.png"))
+param(
+    [string]$OutputPath = (Join-Path (Split-Path $PSScriptRoot -Parent) "SourceAssets\BeachHeightmap_1009.png"),
+    [string]$CenterlinePath = (Join-Path $PSScriptRoot "TrenchCenterline.json")
+)
+
+$centerline = Get-Content -Raw -LiteralPath $CenterlinePath | ConvertFrom-Json
+
+$segmentRows = foreach ($segment in $centerline.segments) {
+    for ($i = 0; $i -lt $segment.points.Count - 1; $i++) {
+        $a = $segment.points[$i]
+        $b = $segment.points[$i + 1]
+        '        {{ {0}, {1}, {2}, {3} }},' -f $a[0], $a[1], $b[0], $b[1]
+    }
+}
+$trenchSegmentLiteral = ($segmentRows -join "`n").TrimEnd(',')
 
 $source = @'
 using System;
@@ -79,6 +96,15 @@ public static class BeachHeightmap
     const double BermRow = 478;
     const double BermMaxHeight = 2.8;
     const double BermThickness = 5.0;
+
+    // Emitted from TrenchCenterline.json by the wrapper above: { ax, ay, bx, by } per polyline edge.
+    static readonly double[,] TrenchSegments = {
+__TRENCH_SEGMENTS__
+    };
+
+    const double TrenchHalfWidth = __TRENCH_HALF_WIDTH__;
+    const double TrenchDepth = __TRENCH_DEPTH__;
+    const double TrenchShoulder = __TRENCH_SHOULDER__;
 
     const double BluffWavinessAmplitude = 15.0;
     const double BluffWarpStartRow = 450;
@@ -176,22 +202,72 @@ public static class BeachHeightmap
         return sum;
     }
 
+    static double ClosestPointOnSegment(double x, double y, double ax, double ay, double bx, double by,
+                                        out double cx, out double cy)
+    {
+        double dx = bx - ax, dy = by - ay;
+        double lengthSquared = dx * dx + dy * dy;
+        double t = lengthSquared > 0 ? ((x - ax) * dx + (y - ay) * dy) / lengthSquared : 0;
+        if (t < 0) t = 0;
+        if (t > 1) t = 1;
+        cx = ax + t * dx;
+        cy = ay + t * dy;
+        return Math.Sqrt((x - cx) * (x - cx) + (y - cy) * (y - cy));
+    }
+
+    static double Grade(double col, double row, bool withNoise)
+    {
+        double warpedRow = row + BluffWaviness(col) * BluffWavinessAmplitude * BluffWarpWeight(row);
+        return Hermite(warpedRow, 1)
+             + (withNoise ? Noise(col, row) * Hermite(warpedRow, 2) : 0)
+             + BermHeight(col, row)
+             + DuneHeight(col, row)
+             + CraterHeight(col, row);
+    }
+
+    // Returns how much of the trench floor this pixel is (1 on the floor, easing to 0 at the
+    // channel edge) and the height that floor sits at. The floor height is sampled at the
+    // nearest CENTRELINE point, not under the pixel, which is what keeps the floor level across
+    // the channel: the defense line falls 0.28 m per metre, so a constant sink would cant the
+    // 6 m floor by 1.7 m and leave "the height of a man in the trench" undefined. Noise is left
+    // out of the floor for the same reason - Zone 4's amplitude is ~1.6 m, which would out-bump
+    // a 1.2 m trench - while berm, dunes and craters stay in so the trench still follows the
+    // ground it crosses.
+    static double TrenchFloor(double x, double y, out double floorHeight)
+    {
+        double nearest = double.MaxValue, floorX = 0, floorY = 0;
+        for (int i = 0; i < TrenchSegments.GetLength(0); i++)
+        {
+            double ax = TrenchSegments[i, 0], ay = TrenchSegments[i, 1];
+            double bx = TrenchSegments[i, 2], by = TrenchSegments[i, 3];
+            if (x < Math.Min(ax, bx) - TrenchHalfWidth || x > Math.Max(ax, bx) + TrenchHalfWidth) continue;
+            if (y < Math.Min(ay, by) - TrenchHalfWidth || y > Math.Max(ay, by) + TrenchHalfWidth) continue;
+            double cx, cy;
+            double d = ClosestPointOnSegment(x, y, ax, ay, bx, by, out cx, out cy);
+            if (d < nearest) { nearest = d; floorX = cx; floorY = cy; }
+        }
+
+        floorHeight = 0;
+        if (nearest >= TrenchHalfWidth) return 0;
+        floorHeight = Grade(floorX, floorY, false) - TrenchDepth;
+
+        double floorHalfWidth = TrenchHalfWidth - TrenchShoulder;
+        if (nearest <= floorHalfWidth) return 1;
+        double t = (nearest - floorHalfWidth) / TrenchShoulder;
+        return 1 - t * t * (3 - 2 * t);
+    }
+
     public static void Generate(string path)
     {
         ushort[] pixels = new ushort[Size * Size];
         for (int row = 0; row < Size; row++)
         {
-            double warpWeight = BluffWarpWeight(row);
             for (int col = 0; col < Size; col++)
             {
-                double warpedRow = row + BluffWaviness(col) * BluffWavinessAmplitude * warpWeight;
-                double baseHeight = Hermite(warpedRow, 1);
-                double amplitude = Hermite(warpedRow, 2);
-                double meters = baseHeight
-                              + Noise(col, row) * amplitude
-                              + BermHeight(col, row)
-                              + DuneHeight(col, row)
-                              + CraterHeight(col, row);
+                double meters = Grade(col, row, true);
+                double floorHeight;
+                double trench = TrenchFloor(col, row, out floorHeight);
+                if (trench > 0) meters = meters * (1 - trench) + floorHeight * trench;
                 double value = 32768.0 + meters * 64.0;
                 if (value < 0) value = 0;
                 if (value > 65535) value = 65535;
@@ -301,6 +377,12 @@ public static class BeachHeightmap
 }
 '@
 
+$source = $source.Replace('__TRENCH_SEGMENTS__', $trenchSegmentLiteral)
+$source = $source.Replace('__TRENCH_HALF_WIDTH__', ($centerline.channel.width_m / 2.0).ToString([cultureinfo]::InvariantCulture))
+$source = $source.Replace('__TRENCH_DEPTH__', $centerline.channel.depth_m.ToString([cultureinfo]::InvariantCulture))
+$source = $source.Replace('__TRENCH_SHOULDER__', $centerline.channel.shoulder_m.ToString([cultureinfo]::InvariantCulture))
+
 Add-Type -TypeDefinition $source -Language CSharp
 [BeachHeightmap]::Generate($OutputPath)
-Write-Host "Heightmap written to $OutputPath"
+Write-Host ("Heightmap written to {0} ({1} trench edges carved, {2} m wide x {3} m deep)" -f `
+    $OutputPath, $segmentRows.Count, $centerline.channel.width_m, $centerline.channel.depth_m)

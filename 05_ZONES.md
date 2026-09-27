@@ -95,8 +95,74 @@ Tactical relief baked into the heightmap (tables/constants at the top of the scr
   are usable cover — kill-zone cover stays scarce by design. The ~10 shallow ones
   (0.5–0.9 m) are bombardment dressing, no protection from plunging MG fire
 
+- The trench channel in Zone 4 — 6 m wide × 1.2 m deep, carved from
+  `Tools/TrenchCenterline.json` rather than from a table in the generator. See **The Trench**
+  below. **Carved into the PNG 2026-09-10; not yet re-imported, so the level has no trench yet**
+
 Zone lengths are first guesses. Walk the grey-box (Step 1), then adjust the
 Profile table at the top of the script, re-run it, and re-import.
+
+## The Trench
+
+Topology is Decision **051**, the carve-plus-script hybrid is **052**, and the authored-artifact
+and contour choices are **056**. The one artifact is `Tools/TrenchCenterline.json`: the heightmap
+generator reads it to carve the channel, and workstream C's placement script reads the same file
+to emit parapet, firing steps and `TrenchNode` actors — so geometry and navigation cannot disagree.
+
+| Segment | Route (profile metres) | Length |
+|---------|------------------------|--------|
+| Fire trench | x 150 → 870, on the contour | 721 m |
+| Communication trench ×3 | fire trench → bunker rear door → bluff entry, at x 200 / 510 / 800 | 90 m each |
+| Sap ×3 | fire trench → the Zone 3 outposts at x 355 / 510 / 655 | 52 / 51 / 61 m |
+
+**The fire trench is not straight and must not be made straight.** Zone 4 is warped laterally by
+`BluffWaviness(x) × 15 m`, so each fire-trench row is `600 − BluffWaviness(x) × 15` — the line
+bows inland by up to 22 m through the middle of the frontage, reaching row 612 at x 570 while
+sitting at row 589 at x 150. That is what holds its ground height constant, which is the single
+assumption Decision 051's exposure margin rests on. **Re-derive every fire-trench and bluff-entry
+row if the `Profile` or `BluffWaviness` in the generator ever changes.**
+
+Measured on the generated heightmap, 2026-09-10:
+
+- Fire-trench floor height varies **0.14 m over the full 721 m**
+- Worst 1 m step along the floor: **0.109 m**
+- Floor is level across the 6 m width (sampled at the nearest centerline point, not under each
+  pixel — a constant sink canted it 1.7 m)
+- Communication trenches climb **25.6 m over 90 m (28%)** — walkable, but it may read as a ramp
+  rather than a trench; judge it on the walk
+- **Known wart**: Zone 4's lateral noise amplitude (~1.0–1.8 m) is the size of the trench itself,
+  so the lip varies **0.61 m to 1.71 m** against a nominal 1.2 m. In a trough the trench barely
+  lowers a man, which is what Decision 045's exposure gain depends on. Unfixed by choice — the
+  remedy damps the noise in a corridor along the line and so smooths already-walked beach
+
+### Re-import verification table
+
+After re-importing, trace the ground at these world coordinates and compare. At Z scale 200 the
+encoding is `world Z (uu) = (grey − 32768) × 1.5625`, which is exactly `metres × 100`, so a trace
+landing within ~10 uu of the expected Z means the import took. The six bluff/door rows are the
+most diagnostic — they are the steepest ground the trench crosses.
+
+| Anchor | Profile x/y | World X/Y (uu) | Floor (m) | Expected trace Z (uu) |
+|--------|-------------|----------------|-----------|-----------------------|
+| `line_end_left` | 150 / 589 | -35400 / 8500 | 29.53 | 2953 |
+| `junction_comm_left` | 200 / 591 | -30400 / 8700 | 29.55 | 2955 |
+| `junction_sap_left` | 355 / 602 | -14900 / 9800 | 29.52 | 2952 |
+| `junction_centre` | 510 / 611 | 600 / 10700 | 29.50 | 2950 |
+| `junction_sap_right` | 655 / 611 | 15100 / 10700 | 29.53 | 2953 |
+| `junction_comm_right` | 800 / 604 | 29600 / 10000 | 29.64 | 2964 |
+| `line_end_right` | 870 / 600 | 36600 / 9600 | 29.55 | 2955 |
+| `outpost_left` | 355 / 550 | -14900 / 4600 | 19.30 | 1930 |
+| `outpost_centre` | 510 / 560 | 600 / 5600 | 23.14 | 2314 |
+| `outpost_right` | 655 / 550 | 15100 / 4600 | 18.19 | 1819 |
+| `bunker_door_left` | 200 / 622 | -30400 / 11800 | 38.52 | 3852 |
+| `bunker_door_centre` | 510 / 638 | 600 / 13400 | 37.33 | 3733 |
+| `bunker_door_right` | 800 / 622 | 29600 / 11800 | 34.78 | 3478 |
+| `bluff_entry_left` | 200 / 681 | -30400 / 17700 | 55.17 | 5517 |
+| `bluff_entry_centre` | 510 / 701 | 600 / 19700 | 55.17 | 5517 |
+| `bluff_entry_right` | 800 / 694 | 29600 / 19000 | 55.22 | 5522 |
+
+`outpost_centre` sits 3.8 m above its flank counterparts because the sap cuts into the rear flank
+of the centre dune at (510, 548) — expected, not an error.
 
 ## Character Pool Structure
 

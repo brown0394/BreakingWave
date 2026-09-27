@@ -6,7 +6,7 @@
 > lives in git log; the why of past choices lives in 03_DECISIONS.md; engine gotchas live
 > in 11_ENGINE_NOTES.md. When updating, replace stale facts instead of appending below them.
 
-## Phase: THE BEACH ARC — workstream A (fog) is DONE: visibility measured and settled at ~35 m. The two pre-merge landmines are CLEARED. Workstream B (landscape carve + duplicate-Landscape cleanup) is next
+## Phase: THE BEACH ARC — workstream A (fog) is DONE at ~35 m, the two pre-merge landmines are CLEARED, and workstream B is HALF DONE: the centerline is authored and the carve is in the heightmap, verified. What remains of B is editor work — re-import and the duplicate-Landscape cleanup
 
 The 2026-08-22 direction change stands: **tuning detail on a beach whose systems do not
 exist yet is measuring absence, not balance.** Decisions 042–047 set the shape of the arc
@@ -329,6 +329,17 @@ the render bubble, and `FInfantrySettings`' perception cap) and goes first for t
   `11_ENGINE_NOTES.md`
 - [x] Tools/GenerateBeachHeightmap.ps1 — generates the zone-profiled heightmap
   (SourceAssets/BeachHeightmap_1009.png); re-run after editing its Profile/Dunes/Berm/Craters tables
+  **or `TrenchCenterline.json`**, which it reads to carve the trench channel
+- [x] **Tools/TrenchCenterline.json — the single authored artifact of Decision 052** (2026-09-10).
+  Fire trench, 3 communication trenches, 3 saps, in profile metres, with tagged anchor points
+  (junctions, bunker doors, bluff entries, outposts) and the channel's width/depth/shoulder and
+  node spacing. Read by the heightmap generator today and by workstream C's placement script next,
+  so trench geometry and trench navigation cannot disagree
+- [x] **Tools/CleanDuplicateLandscapes.py — written 2026-09-10, NOT yet run.** In-editor Python;
+  reports every Landscape-named actor with proxy counts by GUID and by owner, then deletes the
+  duplicate parents only when `DELETE_DUPLICATES` is set True and exactly one parent is shown
+  owning 64 proxies. Report-first by design: deleting the parent that owns the proxies destroys
+  the terrain
 - [x] Tools/PlaceBeachObstacles.py — in-editor Python; spawns grey-box hedgehogs (Zone 2),
   barbed wire, and debris piles (Zone 3) from editable tables, traced onto the landscape;
   idempotent (re-run clears prior batch)
@@ -406,11 +417,73 @@ the render bubble, and `FInfantrySettings`' perception cap) and goes first for t
 - [x] Fog — **settled at ~35 m visibility** (density 1.0, falloff 0.05, max opacity 1.0, start
   distance 500 cm). One `ExponentialHeightFog` in the level, adopted from the FirstPerson
   template's; calibration ruler placed, walked and removed. Revisited once after allies render
-- [ ] Duplicate Landscape parent actors cleanup — pending (see Deferred)
+- [ ] Trench channel — carved into the heightmap PNG and verified, **not yet re-imported** onto
+  the landscape, so the level on disk still has no trench
+- [ ] Duplicate Landscape parent actors cleanup — `Tools/CleanDuplicateLandscapes.py` written,
+  not yet run; rides with the trench re-import so a fourth parent is not added — and goes
+  **first** within that pass, so the import has one unambiguous target
 
 ## Next Steps
 
-### RESUME HERE — workstream A is done; B (landscape) is next
+### RESUME HERE — two things, in this order
+
+**1. PIE-test the 2026-09-10 landmine work. It has never been run.** `cea023a` compiles clean
+and is committed, but the shell/position split (`FInfantrySoldierState` now owns `Position` and
+`FacingYaw`; `SyncSoldierShell` is the single write back to the actor) has not been in a running
+game. The check is narrow: the seven Zone 3 riflemen still rise, fire, flinch and ragdoll exactly
+as before. No behaviour change is expected — shells always exist at `BeginPlay` and the level
+authors yaw-only rotations — so anything that differs is a real regression.
+
+**2. Finish workstream B in the editor.** The headless half is done and verified (below).
+What is left needs the editor open on `Lvl_FirstPerson`:
+
+- [ ] **Cleanup first: run `Tools/CleanDuplicateLandscapes.py` with `DELETE_DUPLICATES = False`**
+  and read the report. It lists every Landscape-named actor with its GUID, its proxy count by two
+  independent routes, and its bounds. **`landscape_guid` / `landscape_actor` may not be exposed to
+  Python in this build** — if both proxy columns read 0 for all three parents, identify the owner
+  in the outliner instead. Only once exactly one parent is shown owning 64 proxies, set the flag
+  True, re-run, and save. Doing this *before* the import leaves one unambiguous import target;
+  picking the wrong parent is silent
+- [ ] **Then re-import `SourceAssets/BeachHeightmap_1009.png`** at 1009×1009, 16-bit grayscale,
+  scale 100/100/200. Nothing outside rows 540–710 changed, so the rest of the beach should look
+  identical. **Verify with traces, not by eye** — `05_ZONES.md` *The Trench* carries a 16-row
+  table of world coordinates and expected Z values; the bluff and bunker-door rows are the most
+  diagnostic. A mis-scaled import still looks like a beach
+- [ ] **Walk the trench.** Then judge whether a 1.2 m carve plus 0.28 m/m approach slope reads
+  as a trench from the beach, and whether the 28% communication-trench climb reads as a trench
+  or a ramp. Settle the noise-corridor question below at the same time
+
+### Workstream B, headless half — DONE 2026-09-10 (second sitting)
+
+**The centerline exists and the carve is in the heightmap.** `Tools/TrenchCenterline.json` is the
+single authored artifact of Decision 052; `GenerateBeachHeightmap.ps1` reads it and carves a
+6 m × 1.2 m channel; the PNG is regenerated. Decision **056** logs the ordering call and the two
+geometry choices.
+
+Measured on the regenerated heightmap, not assumed:
+
+- **Contour-following works.** Fire-trench floor height varies **0.14 m over 721 m**, so
+  Decision 051's exposure margin holds along the whole line instead of only at one point.
+  Worst 1 m step along the floor is **0.109 m**
+- **The floor is level across the width.** Rows 605–608 at col 420 read 29.58 / 29.53 / 29.53 /
+  29.53. Before the fix they read 29.14 / 29.34 / 29.61 / 29.88 — a **1.7 m sideways cant**, from
+  subtracting a constant depth on a 0.28 m/m slope
+- **Nothing else on the beach moved.** 6,204 pixels changed (0.61%), bounding box cols 148–872
+  rows 548–704, and **zero** pixels changed outside rows 540–710 — so the refactor that moved the
+  profile maths into a shared `Grade()` is behaviour-preserving
+- The three communication trenches come out at exactly **90 m** each, and the whole network at
+  10 m spacing gives **~120 nodes** against Decision 052's independent ~115–120
+
+**One thing found and deliberately NOT fixed — it needs a call.** Zone 4's lateral noise
+amplitude is ~1.0–1.8 m, comparable to the trench depth itself, so the *lip* height varies with
+where the trench crosses a noise peak or trough: measured 0.61 m at x 570 and 1.71 m at x 260
+against a nominal 1.2 m. In a trough the trench barely lowers a man, which is what Decision 045's
+exposure gain depends on. The fix is ~3 lines — damp the noise amplitude in a corridor (say 15 m)
+either side of the centerline, so the lip stays near 1.2 m — but it smooths a 30 m band of
+already-walked beach along the defense line, which is a terrain change beyond "carve the channel".
+Decide it before or during the walk.
+
+### Workstream A, for reference — and what it left open
 
 **Fog is settled at ~35 m** (2026-09-05). `Tools/PlaceFog.py` now runs clean, the calibration
 ruler has been removed, and the level is saved carrying exactly one `ExponentialHeightFog`:
@@ -447,9 +520,10 @@ visibility. Setting the MG's vision to 35 m **deletes the Zone 1 kill zone**, wh
 230–310 m from the bunkers and is where `05_ZONES.md` says most deaths happen. The render
 bubble (Decision 042) does not exist yet and cannot be set until the merge lands.
 
-**State on entry**: branch `master`, which now carries everything through `4b86397` — the
-`decision-041-takeover-disc` work landed and no other branch exists. B is the next thing to
-touch; the two landmines in the code-health checklist below were cleared on 2026-09-10.
+**State on entry**: branch `master`, which carries everything through `cea023a` (both landmines
+cleared), and no other branch exists. On top of that, uncommitted: `Tools/TrenchCenterline.json`,
+`Tools/CleanDuplicateLandscapes.py`, the carve in `GenerateBeachHeightmap.ps1`, and the
+regenerated `SourceAssets/BeachHeightmap_1009.png`.
 
 
 ### The build order (Decision 055) — terrain-first, in this sequence
@@ -462,10 +536,16 @@ today's systems still running.
   The render bubble (042) and `FInfantrySettings`' perception cap still await the merge.
   **Revisit once** after allies render. The two Step 2 leftovers — judge zone sizes, record
   zone transit times into `05_ZONES.md` — did **not** happen and are still open
-- [ ] **B — Landscape.** Add the trench channel (6 m wide × 1.2 m deep) to
-  `GenerateBeachHeightmap.ps1`, regenerate, re-import. **Clean up the three duplicate
-  Landscape parent actors in the same pass** — check which owns the 64 streaming proxies
-- [ ] **C — Trench geometry + nodes.** Hand-author the centerline table; one script emits
+- [~] **B — Landscape. HALF DONE.** The centerline is authored (`Tools/TrenchCenterline.json`,
+  Decision 056, promoted ahead of the carve so one file feeds both the channel and C), the
+  6 m × 1.2 m channel is carved into `GenerateBeachHeightmap.ps1`, and the heightmap is
+  regenerated and verified — contour-following holds the floor to 0.14 m over 721 m, the floor
+  is level across the width, and nothing outside rows 540–710 moved. **Left: re-import, and the
+  duplicate-Landscape cleanup** via `Tools/CleanDuplicateLandscapes.py` (report-first; read it
+  before setting `DELETE_DUPLICATES = True`). Also open: whether to damp the lateral noise in a
+  corridor along the trench, since the lip currently varies 0.61–1.71 m against a nominal 1.2 m
+- [ ] **C — Trench geometry + nodes.** The centerline is already authored — C now *consumes*
+  `Tools/TrenchCenterline.json` rather than creating it. One script emits
   parapet, firing steps, saps to the three outposts, and tagged `TrenchNode` actors
   (~115–120). In-editor run plus a level save, as with the infantry pass
 - [ ] **D — Craft.** 7–9 hulls in `LANDING_CRAFT`; arrival/ground/ramp/disgorge/depart cycle;
@@ -583,9 +663,11 @@ merge. Each is tagged with the workstream it should ride with.
 
 ### Numbers still open (all tentative, tune after the systems exist)
 
-Exact craft count and arrival cadence; boatload size; final `MaxAlive`; the trench centerline
-route; ally corpse cap; every spread value. The fog distance is **no longer open** — settled
-at ~35 m on 2026-09-05, to be revisited once after allies render.
+Exact craft count and arrival cadence; boatload size; final `MaxAlive`; ally corpse cap; every
+spread value. The fog distance is **no longer open** — settled at ~35 m on 2026-09-05, to be
+revisited once after allies render. The trench centerline route is **authored** as of 2026-09-10
+(`Tools/TrenchCenterline.json`) and still tunable: edit the table and re-run the generator, but
+re-derive the contour rows if the `Profile` or `BluffWaviness` in the generator changes.
 
 ### Explicitly OFF the list
 
@@ -651,10 +733,36 @@ so world = profile-meters × 100 − 50400 on both axes. Profile coords below wi
 - Landing craft (Zone 0, ramp faces +Y inland): A-left 230/270 (−27400, −23400), B-center 510/270 (600, −23400), C-right 790/270 (28600, −23400)
 - Bunkers (Zone 4, slit faces −Y sea): MG-left 200/620 (−30400, 11600), MG-center 510/635 (600, 13100), MG-right 800/620 (29600, 11600)
 
-## What Was Done (2026-09-10)
+## What Was Done (2026-09-10, second sitting)
 
-**Both pre-merge landmines cleared, and nothing else touched.** Workstream B was not started;
-the trench-centerline ordering question is still open (see the build order below).
+**Workstream B's headless half, and the ordering question that was blocking it.** Decision 056
+logs the call: the centerline is promoted ahead of the carve into one shared file that both the
+heightmap generator and workstream C read.
+
+- **`Tools/TrenchCenterline.json`** — fire trench x 150→870 on the contour, 3 communication
+  trenches (fire trench → bunker rear door → bluff entry), 3 saps to the Zone 3 outposts at
+  x 355/510/655. Anchors are tagged, so C's emitter gets its junction, door, bluff-entry and
+  outpost nodes from the same points that shaped the terrain
+- **`GenerateBeachHeightmap.ps1` carves from it.** PowerShell reads the JSON and injects the
+  polyline edges into the embedded C#; the carve is a distance-to-polyline channel with eased
+  shoulders. The profile maths moved into one `Grade(col, row, withNoise)` used by both the open
+  terrain and the trench floor
+- **Two geometry corrections, both caught by measurement rather than reasoning.** The fire trench
+  follows the contour (`row = 600 − BluffWaviness(x) × 15`) because a constant row would swing its
+  ground height ±4 m and eat Decision 051's exposure margin; and the floor is sampled at the
+  nearest centerline point, because a constant sink on a 0.28 m/m slope canted the 6 m floor by
+  1.7 m. Floor spread is now 0.14 m over 721 m, worst 1 m step 0.109 m
+- **A wrong verification metric, worth remembering.** The first check measured "sink vs. the old
+  heightmap" and read 2.56 m where 1.2 m was expected, with the channel apparently missing
+  entirely at col 510. Both were the metric's fault: suppressing the in-channel noise legitimately
+  changes height by ±1.6 m, and col 510 runs *along* the comm trench and sap rather than across
+  them. The carve was correct before the cross-section was sampled in the right place
+- **`Tools/CleanDuplicateLandscapes.py`** written, report-first, not yet run
+- **NOT re-imported.** The PNG carries the trench; the level does not
+
+## What Was Done (2026-09-10, first sitting)
+
+**Both pre-merge landmines cleared, and nothing else touched.**
 
 - **`ClaimAlly` split out of `KillAlly`** (`BeachAllySim.h/.cpp`). Two identical bodies on
   purpose — the split exists so that H can hang the ally corpse off `KillAlly` alone. The
