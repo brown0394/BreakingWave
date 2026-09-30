@@ -161,12 +161,16 @@ weirdness. Each entry cost a failed session or a failed feel-check; none of it i
 - The level saves **one file per actor** under
   `Content/__ExternalActors__/FirstPerson/Lvl_FirstPerson/`. To verify that a placement run was
   saved, check those files' timestamps from outside the editor — the in-editor view proves nothing.
-- **Re-importing the heightmap — do the duplicate-parent cleanup FIRST.** The level carries three
-  `ALandscape` parents (`Landscape`, `Landscape2`, `Landscape4`, all at −50400/−50400) and only one
-  owns the 64 streaming proxies. Re-importing while all three exist means picking the right one by
-  eye, and picking wrong is silent. Run `Tools/CleanDuplicateLandscapes.py` (report-first; it
-  refuses to delete on an unclear report), save, and only then re-import — one unambiguous target.
-  Decision 052 calls cleanup and re-import "the same pass"; this is the order within it.
+- **Re-importing the heightmap — into the one existing Landscape, never a new one.** Earlier
+  re-imports left three `ALandscape` parents at −50400/−50400, only one owning the 64 streaming
+  proxies, and picking between them by eye is silent when wrong. The cleanup ran 2026-09-30: the
+  sole parent is the one labelled **`Landscape2`** (the owner was not the unnumbered one). After
+  any re-import, run `Tools/CleanDuplicateLandscapes.py` with the flag False: it must still report
+  one parent owning all proxies. It refuses to delete on an unclear report.
+  - Which parent owns a proxy, from Python: `proxy.get_landscape_actor()` (a BlueprintCallable
+    UFUNCTION), or the `landscape_actor_ref` property. `LandscapeGuid` is a bare `UPROPERTY` and
+    is **never readable from Python** in 5.6 — matching on it compares "unreadable" to itself and
+    reports every parent as owning every proxy.
   - The import must match what the PNG is: **1009×1009, 16-bit grayscale, scale X=100 Y=100
     Z=200** (Decision 022 — Z=200 was chosen because profile-true heights at Z=100 read as flat
     in first person). Getting Z wrong rescales the whole beach, not just the new feature.
@@ -190,7 +194,8 @@ weirdness. Each entry cost a failed session or a failed feel-check; none of it i
   Measure against the smooth grade, and take cross-sections **perpendicular** to the feature.
 - Detecting the landscape corner: match on **class name substring**, not
   `isinstance(unreal.Landscape)`. `ALandscapeStreamingProxy` is a SIBLING of `ALandscape`
-  (both derive from `ALandscapeProxy`), so isinstance misses all 64 proxies, and the level
-  carries three duplicate Landscape parents of which only one owns them. First-match then
+  (both derive from `ALandscapeProxy`), so isinstance misses all 64 proxies, and the parent has
+  no components of its own (bounds extent 0), which is how the level looked when it carried
+  three duplicate parents. First-match then
   returns a degenerate corner, every placement trace lands off-map, and the symptom is
   "no ground under X" for every single actor. Take the min over all non-empty bounds.

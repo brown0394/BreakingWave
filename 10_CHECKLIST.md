@@ -18,10 +18,11 @@ Legend: `[x]` done · `[~]` partially done · `[ ]` not started.
   - [x] Czech hedgehog placement (Zone 2) — Tools/PlaceBeachObstacles.py
   - [x] Sand berms (baked into heightmap), debris piles (Zone 3, placement tool)
   - [~] Trench channel (6 m × 1.2 m, Zone 4) — carved into the heightmap from
-    `Tools/TrenchCenterline.json` and verified, **not yet re-imported**; tuned values and the
+    `Tools/TrenchCenterline.json` and verified, re-imported 2026-09-30, **not yet trace-verified
+    in the level**; tuned values and the
     re-import verification table live in `05_ZONES.md` under *The Trench*
-  - [ ] Duplicate Landscape parent cleanup — `Tools/CleanDuplicateLandscapes.py`, report-first.
-    Run it BEFORE the trench re-import so there is one unambiguous import target
+  - [x] Duplicate Landscape parent cleanup — `Tools/CleanDuplicateLandscapes.py`, 2026-09-30;
+    one parent left
   - [x] Exterior of 3 bunkers (Zone 4) — Tools/PlaceHeroPieces.py
   - [x] 3 landing craft with ramps (Zone 0) — Tools/PlaceHeroPieces.py
 - [x] Fog setup — **settled at ~35 m**, measured with the range-marker ruler in

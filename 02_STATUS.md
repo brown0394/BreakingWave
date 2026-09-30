@@ -1,6 +1,6 @@
 # Current Status
 
-> Last updated: 2026-09-27. CLAUDE.md imports this file into every session, so it holds the
+> Last updated: 2026-09-30. CLAUDE.md imports this file into every session, so it holds the
 > current state and what's next — nothing else — and stays under ~150 lines. **Replace stale
 > lines; never append history.** Session history is git log; the why of a choice is
 > `03_DECISIONS.md`; engine traps are `11_ENGINE_NOTES.md`.
@@ -8,9 +8,10 @@
 ## Phase: the beach arc (Decisions 042–056)
 
 Tuning detail on a beach whose systems do not exist yet measures absence, not balance, so the arc
-builds the missing systems terrain-first (Decision 055). **A (fog) is done. B is half done**: the
-trench is carved into the heightmap PNG and verified, but the level is not re-imported, so the
-level on disk has no trench. Nothing from C onward is started.
+builds the missing systems terrain-first (Decision 055). **A (fog) is done. B is mostly done**:
+the trench is carved into the heightmap PNG, the duplicate Landscape parents are gone, and the PNG
+is re-imported into the level — but the level's trench is not yet trace-verified or walked.
+Nothing from C onward is started.
 
 ## RESUME HERE
 
@@ -19,13 +20,10 @@ level on disk has no trench. Nothing from C onward is started.
    Zone 3 riflemen still rise, fire, flinch and ragdoll as before. No change is expected, so any
    difference is a regression.
 2. **Finish B in the editor, on `Lvl_FirstPerson`, in this order:**
-   - [ ] Run `Tools/CleanDuplicateLandscapes.py` with `DELETE_DUPLICATES = False` and read the
-     report. If both proxy columns read 0 for all three parents, `landscape_guid` /
-     `landscape_actor` are not exposed to Python in this build — identify the owner in the
-     outliner. Only when exactly one parent owns the 64 proxies: set the flag True, re-run, save.
-   - [ ] Re-import `SourceAssets/BeachHeightmap_1009.png` (settings and traps: `11_ENGINE_NOTES.md`
-     *Level / landscape*; write the 5.6 menu path in there). **Verify with traces**, not by eye,
-     against the table in `05_ZONES.md` *The Trench*.
+   - [ ] **Trace-verify the re-import** against the table in `05_ZONES.md` *The Trench* — not by
+     eye. On disk it looks right: still one parent, and only 21 of 64 proxies changed content (a
+     shifted or rescaled import would change all 64). Write the 5.6 re-import menu path into
+     `11_ENGINE_NOTES.md` *Level / landscape*.
    - [ ] Walk the trench. Does a 1.2 m carve read as a trench from the beach? Does the 28%
      communication-trench climb read as a trench or a ramp? Decide the noise corridor
      (`05_ZONES.md`, *Known wart*). Judge zone sizes and time the zones on the same walk (A's
@@ -38,7 +36,8 @@ Only E has no playable state. The definition of done and what is out of scope ar
 - [x] **A — Fog.** ~35 m (density 1.0, falloff 0.05, start 500 cm), set by `Tools/PlaceFog.py`.
   Open: revisit once allies render ("can I see the man I am about to become"); judge zone sizes
   and record zone transit times in `05_ZONES.md` — never done.
-- [~] **B — Landscape.** Centerline and carve done (056); cleanup, re-import, walk remain.
+- [~] **B — Landscape.** Centerline, carve (056), duplicate cleanup and re-import done; trace
+  verification and the walk remain.
 - [ ] **C — Trench geometry + nodes.** One in-editor script consumes `TrenchCenterline.json` and
   emits parapet, firing steps, saps and ~120 tagged `TrenchNode` actors; then a level save.
 - [ ] **D — Craft.** 7–9 hulls with an arrive/ground/ramp/disgorge/depart cycle; boatloads replace
@@ -134,12 +133,11 @@ tentative; each system's knobs live in its settings struct.
   shots → drop, flinch layer, ragdoll. No relocation.
 - **Telemetry** (`PlaytestRecorder`) and **debug commands** — see `12_ARCHITECTURE.md` §13, §15.
 
-**Tools** (`Tools/`) — every script is idempotent and has been run, except
-`CleanDuplicateLandscapes.py`. All audio is synthesized placeholder. `BakeIKBonesFromFK.py`
+**Tools** (`Tools/`) — every script is idempotent and has been run. All audio is synthesized placeholder. `BakeIKBonesFromFK.py`
 **must re-run after any IK retarget**; `AddSprintToLocomotion.py` is superseded, kept for history.
 
-**Level** (`Lvl_FirstPerson`) — landscape at 100/100/200 with dunes, berm and 13 craters, **no
-trench yet**, three duplicate Landscape parents until the cleanup; 22 hedgehogs, 151 wire posts,
+**Level** (`Lvl_FirstPerson`) — landscape at 100/100/200 with dunes, berm and 13 craters and
+the trench (re-imported, **not yet trace-verified**), one Landscape parent (`Landscape2`) owning 64 proxies; 22 hedgehogs, 151 wire posts,
 20 debris blocks; 3 greybox bunkers and 3 landing craft; 3 MG guns + manager; 7 infantry shells +
 manager + 12 parapet pieces; fog at ~35 m.
 
