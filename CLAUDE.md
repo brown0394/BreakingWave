@@ -31,7 +31,7 @@ zombie headless editor breaks both saves (silently) and the link (LNK1104).
 
 - **Build**: `& "$UE\Build\BatchFiles\Build.bat" BreakingWaveEditor Win64 Development -project="$Proj" -WaitMutex`
 - **Headless Python** (asset work, no UI): `& "$UE\Binaries\Win64\UnrealEditor-Cmd.exe" "$Proj" -run=pythonscript -script="<absolute .py path>" -stdout -unattended -nosplash`
-- **Offscreen full editor** (retargeting and other UI-touching batch ops): same executable with `-ExecutePythonScript="<absolute .py path>" -stdout -unattended -nosplash -RenderOffscreen`
+- **Offscreen full editor** (retargeting and other UI-touching batch ops): same executable with `-ExecutePythonScript="<absolute .py path>" -stdout -unattended -nosplash -RenderOffscreen`. With `/Game/FirstPerson/Lvl_FirstPerson` after `"$Proj"` it opens the level and exits on its own, so read-only level checks (`Tools/VerifyHeightmapReimport.py`) need no user; output is in `Saved/Logs/BreakingWave.log`
 - **Placement scripts** (`Tools/Place*.py`, `Tools/CleanDuplicateLandscapes.py`) are editor-only — spawning actors crashes headless — so the user runs them in the open editor
 - **Heightmap**: `Tools\GenerateBeachHeightmap.ps1` (no arguments) writes `SourceAssets\BeachHeightmap_1009.png`
 - **Playtest analysis**: `Tools\AnalyzePlaytests.bat` — runs the analyzer on UE's bundled Python, where matplotlib is installed; system `python` is only the Store stub. Set `$env:PYTHONIOENCODING = 'utf-8'` first until workstream J fixes the cp949 crash

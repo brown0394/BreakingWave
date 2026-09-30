@@ -138,7 +138,8 @@ Measured on the generated heightmap, 2026-09-10:
 
 ### Re-import verification table
 
-After re-importing, trace the ground at these world coordinates and compare. At Z scale 200 the
+After re-importing, run `Tools/VerifyHeightmapReimport.py`: it parses this table, traces the
+landscape at each row and prints expected against measured. At Z scale 200 the
 encoding is `world Z (uu) = (grey − 32768) × 1.5625`, which is exactly `metres × 100`, so a trace
 landing within ~10 uu of the expected Z means the import took. The six bluff/door rows are the
 most diagnostic — they are the steepest ground the trench crosses.

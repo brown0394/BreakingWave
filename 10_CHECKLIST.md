@@ -17,9 +17,9 @@ Legend: `[x]` done · `[~]` partially done · `[ ]` not started.
   - [x] Shell craters (3 deep + 10 shallow, raised rims, baked into heightmap)
   - [x] Czech hedgehog placement (Zone 2) — Tools/PlaceBeachObstacles.py
   - [x] Sand berms (baked into heightmap), debris piles (Zone 3, placement tool)
-  - [~] Trench channel (6 m × 1.2 m, Zone 4) — carved into the heightmap from
-    `Tools/TrenchCenterline.json` and verified, re-imported 2026-09-30, **not yet trace-verified
-    in the level**; tuned values and the
+  - [x] Trench channel (6 m × 1.2 m, Zone 4) — carved into the heightmap from
+    `Tools/TrenchCenterline.json`, re-imported and trace-verified in the level 2026-09-30
+    (`Tools/VerifyHeightmapReimport.py`); tuned values and the
     re-import verification table live in `05_ZONES.md` under *The Trench*
   - [x] Duplicate Landscape parent cleanup — `Tools/CleanDuplicateLandscapes.py`, 2026-09-30;
     one parent left

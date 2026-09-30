@@ -16,6 +16,12 @@ weirdness. Each entry cost a failed session or a failed feel-check; none of it i
   headless — required for the UI-touching batch ops above. EXCEPTION: opening a Persona
   editor offscreen (open_editor_for_assets) crashes ~2 frames later (Slate paint crash in
   AnimationEditor.dll) — never use the Persona open/save/close trick; use BlendSpaceTool (below).
+- **Read-only level checks run offscreen, no user needed.** Pass the map after the project:
+  `UnrealEditor-Cmd.exe "$Proj" /Game/FirstPerson/Lvl_FirstPerson -ExecutePythonScript=<abs .py>
+  -stdout -unattended -nosplash -RenderOffscreen`. It loads the World Partition level with all 64
+  landscape proxies, runs the script, and **exits on its own** (~12 s). `unreal.log` lines land in
+  `Saved/Logs/BreakingWave.log`, not stdout — read the log. Spawning and saving stay with the
+  user's open editor.
 - The commandlet exits 1 if ANY asset it touches logs errors (e.g. a BP compile failure),
   even when the Python succeeded — read the Warning/Error Summary, not just the exit code.
 - `unreal.log()` does NOT reach stdout headless — use `unreal.log_warning()`.
@@ -177,9 +183,10 @@ weirdness. Each entry cost a failed session or a failed feel-check; none of it i
   - Encoding, for checking a trace by hand: `world Z (uu) = (grey − 32768) × 1.5625` at Z scale
     200, which is exactly `metres × 100`. 64 grey steps = 1 m.
   - **Verify with traces at known coordinates, not by eye** — a failed or mis-scaled import still
-    looks like a beach. `05_ZONES.md` carries a 16-row table of world coordinates and expected Z
-    for the trench anchors; the bluff and bunker-door rows are the most diagnostic because they
-    sit on the steepest ground.
+    looks like a beach. `Tools/VerifyHeightmapReimport.py` traces the 16 trench anchors in
+    `05_ZONES.md` against their expected Z, ignoring non-landscape actors (the bunker-door anchors
+    sit under the greybox bunkers). It runs offscreen (see *Headless editor work*); the
+    2026-09-30 re-import passed 16/16 within 0.5 uu.
   - The exact menu path in 5.6 is **not recorded here** — whoever does the next re-import should
     write it into this bullet, since it has now been needed three times (initial, craters, trench).
 - **Carving features into the heightmap: the lateral noise is the same size as the feature.**

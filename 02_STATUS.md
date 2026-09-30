@@ -8,10 +8,9 @@
 ## Phase: the beach arc (Decisions 042–056)
 
 Tuning detail on a beach whose systems do not exist yet measures absence, not balance, so the arc
-builds the missing systems terrain-first (Decision 055). **A (fog) is done. B is mostly done**:
-the trench is carved into the heightmap PNG, the duplicate Landscape parents are gone, and the PNG
-is re-imported into the level — but the level's trench is not yet trace-verified or walked.
-Nothing from C onward is started.
+builds the missing systems terrain-first (Decision 055). **A (fog) is done. B is done except
+the walk**: the trench is in the level and trace-verified, and the duplicate Landscape parents are
+gone. Nothing from C onward is started.
 
 ## RESUME HERE
 
@@ -19,15 +18,12 @@ Nothing from C onward is started.
    `FacingYaw`; `SyncSoldierShell` is the only write back to the actor. Check only that the seven
    Zone 3 riflemen still rise, fire, flinch and ragdoll as before. No change is expected, so any
    difference is a regression.
-2. **Finish B in the editor, on `Lvl_FirstPerson`, in this order:**
-   - [ ] **Trace-verify the re-import** against the table in `05_ZONES.md` *The Trench* — not by
-     eye. On disk it looks right: still one parent, and only 21 of 64 proxies changed content (a
-     shifted or rescaled import would change all 64). Write the 5.6 re-import menu path into
-     `11_ENGINE_NOTES.md` *Level / landscape*.
-   - [ ] Walk the trench. Does a 1.2 m carve read as a trench from the beach? Does the 28%
-     communication-trench climb read as a trench or a ramp? Decide the noise corridor
-     (`05_ZONES.md`, *Known wart*). Judge zone sizes and time the zones on the same walk (A's
-     leftovers).
+2. **Walk the trench** — B's last step. Does a 1.2 m carve read as a trench from the beach? Does
+   the 28% communication-trench climb read as a trench or a ramp? Decide the noise corridor
+   (`05_ZONES.md`, *Known wart*). Judge zone sizes and time the zones on the same walk (A's
+   leftovers).
+3. **Write the 5.6 heightmap re-import menu path** into `11_ENGINE_NOTES.md` *Level / landscape*
+   while it is fresh — the 2026-09-30 re-import did not record it.
 
 ## The arc — build order (Decision 055)
 
@@ -36,8 +32,8 @@ Only E has no playable state. The definition of done and what is out of scope ar
 - [x] **A — Fog.** ~35 m (density 1.0, falloff 0.05, start 500 cm), set by `Tools/PlaceFog.py`.
   Open: revisit once allies render ("can I see the man I am about to become"); judge zone sizes
   and record zone transit times in `05_ZONES.md` — never done.
-- [~] **B — Landscape.** Centerline, carve (056), duplicate cleanup and re-import done; trace
-  verification and the walk remain.
+- [~] **B — Landscape.** Centerline, carve (056), duplicate cleanup, re-import and trace
+  verification done; the walk remains.
 - [ ] **C — Trench geometry + nodes.** One in-editor script consumes `TrenchCenterline.json` and
   emits parapet, firing steps, saps and ~120 tagged `TrenchNode` actors; then a level save.
 - [ ] **D — Craft.** 7–9 hulls with an arrive/ground/ramp/disgorge/depart cycle; boatloads replace
@@ -137,7 +133,7 @@ tentative; each system's knobs live in its settings struct.
 **must re-run after any IK retarget**; `AddSprintToLocomotion.py` is superseded, kept for history.
 
 **Level** (`Lvl_FirstPerson`) — landscape at 100/100/200 with dunes, berm and 13 craters and
-the trench (re-imported, **not yet trace-verified**), one Landscape parent (`Landscape2`) owning 64 proxies; 22 hedgehogs, 151 wire posts,
+the trench (trace-verified 16/16), one Landscape parent (`Landscape2`) owning 64 proxies; 22 hedgehogs, 151 wire posts,
 20 debris blocks; 3 greybox bunkers and 3 landing craft; 3 MG guns + manager; 7 infantry shells +
 manager + 12 parapet pieces; fog at ~35 m.
 
