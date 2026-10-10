@@ -184,21 +184,25 @@ weirdness. Each entry cost a failed session or a failed feel-check; none of it i
     200, which is exactly `metres × 100`. 64 grey steps = 1 m.
   - **Verify with traces at known coordinates, not by eye** — a failed or mis-scaled import still
     looks like a beach. `Tools/VerifyHeightmapReimport.py` traces the 16 trench anchors in
-    `05_ZONES.md` against their expected Z, ignoring non-landscape actors (the bunker-door anchors
-    sit under the greybox bunkers). It runs offscreen (see *Headless editor work*); the
-    2026-09-30 re-import passed 16/16 within 0.5 uu.
+    `05_ZONES.md` against their expected Z, ignoring non-landscape actors so greybox over an anchor
+    never reports. It runs offscreen (see *Headless editor work*); the 2026-09-30 re-import passed
+    16/16 within 0.5 uu.
   - The exact menu path in 5.6 is **not recorded here** — whoever does the next re-import should
-    write it into this bullet, since it has now been needed three times (initial, craters, trench).
+    write it into this bullet, since it has now been needed three times (initial, craters, trench)
+    and was forgotten each time.
 - **Carving features into the heightmap: the lateral noise is the same size as the feature.**
   At 1009×1009 and scale 100, 1 pixel is 1 m, and the `Profile` table's third column is a noise
   amplitude that reaches ~1.8 m in Zone 4. A 1.2 m trench cut into that reads as a 0.6 m scrape
   where it crosses a noise trough and a 2.8 m gully where it crosses a peak, so any carved feature
-  under ~2 m must suppress the noise inside itself or it will not survive. Two traps follow:
-  subtracting a constant depth on sloping ground **cants the floor** (0.28 m/m across a 6 m
-  channel is 1.7 m of sideways tilt) — sample the floor height at the nearest centerline point
-  instead; and measuring the result as "difference from the previous heightmap" is useless once
-  noise is suppressed, because the suppression itself moves height by more than the carve does.
-  Measure against the smooth grade, and take cross-sections **perpendicular** to the feature.
+  under ~2 m must take its depth from the noisy ground around it, not the smooth grade, or it
+  will not survive. Three traps follow. Subtracting a constant depth under each pixel on sloping
+  ground **cants the floor** (0.28 m/m across a 6 m channel is 1.7 m of sideways tilt), so take
+  one floor height per centerline point. But measure that depth from the centre and the
+  downhill wall all but vanishes: the 2026-09-30 trench had ~0.1 m in front and ~2.3 m behind,
+  and nobody saw it until the walk. **Measure depth from the lower lip** (Decision 057). And
+  measuring the result as "difference from the previous heightmap" is useless, because noise
+  moves height by more than the carve does. Take cross-sections **perpendicular** to the feature
+  and read **both walls separately** — an average lip height hides exactly this failure.
 - Detecting the landscape corner: match on **class name substring**, not
   `isinstance(unreal.Landscape)`. `ALandscapeStreamingProxy` is a SIBLING of `ALandscape`
   (both derive from `ALandscapeProxy`), so isinstance misses all 64 proxies, and the parent has

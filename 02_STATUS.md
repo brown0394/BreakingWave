@@ -1,6 +1,6 @@
 # Current Status
 
-> Last updated: 2026-09-30. CLAUDE.md imports this file into every session, so it holds the
+> Last updated: 2026-10-10. CLAUDE.md imports this file into every session, so it holds the
 > current state and what's next — nothing else — and stays under ~150 lines. **Replace stale
 > lines; never append history.** Session history is git log; the why of a choice is
 > `03_DECISIONS.md`; engine traps are `11_ENGINE_NOTES.md`.
@@ -8,22 +8,25 @@
 ## Phase: the beach arc (Decisions 042–056)
 
 Tuning detail on a beach whose systems do not exist yet measures absence, not balance, so the arc
-builds the missing systems terrain-first (Decision 055). **A (fog) is done. B is done except
-the walk**: the trench is in the level and trace-verified, and the duplicate Landscape parents are
-gone. Nothing from C onward is started.
+builds the missing systems terrain-first (Decision 055). **A (fog) is done. B is reopened**: the
+2026-10-10 walk found the trench a near-straight line with walls the player could not leave, so it
+was reshaped as a zigzag (057) and the player got a climb (058). Both are built; neither has run.
+Nothing from C onward is started.
 
 ## RESUME HERE
 
-1. **PIE-test `cea023a` — it has never run.** `FInfantrySoldierState` now owns `Position` and
-   `FacingYaw`; `SyncSoldierShell` is the only write back to the actor. Check only that the seven
-   Zone 3 riflemen still rise, fire, flinch and ragdoll as before. No change is expected, so any
-   difference is a regression.
-2. **Walk the trench** — B's last step. Does a 1.2 m carve read as a trench from the beach? Does
-   the 28% communication-trench climb read as a trench or a ramp? Decide the noise corridor
-   (`05_ZONES.md`, *Known wart*). Judge zone sizes and time the zones on the same walk (A's
-   leftovers).
-3. **Write the 5.6 heightmap re-import menu path** into `11_ENGINE_NOTES.md` *Level / landscape*
-   while it is fresh — the 2026-09-30 re-import did not record it.
+1. **Re-import the heightmap** (`SourceAssets/BeachHeightmap_1009.png`, already regenerated) into
+   `Landscape2`, never a new landscape. **Write down every click as you go** — nobody remembers
+   the 5.6 menu path, and it goes into `11_ENGINE_NOTES.md` *Level / landscape*. Then run
+   `Tools/CleanDuplicateLandscapes.py` (flag False: 1 parent, 64 proxies) and
+   `Tools/VerifyHeightmapReimport.py` (16/16 against the new table in `05_ZONES.md`).
+2. **PIE the climb and walk the trench again.** Does the zigzag read as a trench from the beach and
+   from inside it? Climb out over the rear wall (~2.3 m, ~1.7 s), the front wall, and the side of a
+   craft — too slow, too fast, or does it fire when you only brushed a wall? Walk a communication
+   trench round its bunker to the rear door, and out at the bluff end. Judge zone sizes and time
+   the zones on the same walk (A's leftovers).
+3. Then **C**: the placement script reads `TrenchCenterline.json` as it now stands (one node per
+   zigzag vertex fits the 10 m spacing).
 
 ## The arc — build order (Decision 055)
 
@@ -32,8 +35,8 @@ Only E has no playable state. The definition of done and what is out of scope ar
 - [x] **A — Fog.** ~35 m (density 1.0, falloff 0.05, start 500 cm), set by `Tools/PlaceFog.py`.
   Open: revisit once allies render ("can I see the man I am about to become"); judge zone sizes
   and record zone transit times in `05_ZONES.md` — never done.
-- [~] **B — Landscape.** Centerline, carve (056), duplicate cleanup, re-import and trace
-  verification done; the walk remains.
+- [~] **B — Landscape.** Duplicate cleanup done. The zigzag carve (057) is generated and measured
+  but not re-imported; then the walk.
 - [ ] **C — Trench geometry + nodes.** One in-editor script consumes `TrenchCenterline.json` and
   emits parapet, firing steps, saps and ~120 tagged `TrenchNode` actors; then a level save.
 - [ ] **D — Craft.** 7–9 hulls with an arrive/ground/ramp/disgorge/depart cycle; boatloads replace
@@ -93,9 +96,10 @@ it; re-measure after D); `TryTakeover` re-iterates actors per death where manage
 ## Open numbers and standing calls
 
 - **Open, tune once the systems exist**: craft count and cadence, boatload size, final `MaxAlive`,
-  ally corpse cap, every spread value. The trench route stays tunable: edit
-  `Tools/TrenchCenterline.json`, re-run the generator, and re-derive the contour rows if `Profile`
-  or `BluffWaviness` changes.
+  ally corpse cap, every spread value, every `FClimbSettings` number. The trench stays tunable:
+  edit the `Route` table or zigzag constants in `Tools/GenerateTrenchCenterline.ps1`, run
+  `Tools/GenerateBeachHeightmap.ps1`, re-import, and re-derive the contour rows if `Profile` or
+  `BluffWaviness` changes.
 - **Three constants are called "fog" and they are different distances.** Only
   `FAllySimSettings.TakeoverRadius` (3500 = 35 m) tracks player visibility.
   `FInfantrySettings.MaxEngagementRange` (12000) and `FMGSettings.VisibilityMaxRange` (50000) do
@@ -113,7 +117,8 @@ it; re-measure after D); `TryTakeover` re-iterates actors per death where manage
 **Code** (`Source/BreakingWave/`; structure and reasons in `12_ARCHITECTURE.md`). All numbers
 tentative; each system's knobs live in its settings struct.
 - **Player** (`BreakingWaveCharacter`) — walk 600 / sprint 900, no jump; stationary prone on C,
-  dive-into-prone when moving; rifle (LMB hip, RMB aimed, R reload, infinite reserves);
+  dive-into-prone when moving; **climb over** walls 0.5–2.5 m by walking into them (058, never
+  run); rifle (LMB hip, RMB aimed, R reload, infinite reserves);
   mesh-authoritative hits (head kills, otherwise the second wound kills); hit shake + pain grunt.
   Feel-checked. **Unverified**: whether the FP ABP has the `DefaultSlot` the rifle montages play
   on — if the arms don't animate, add a Slot node to `ABP_FP_Copy` or wait for the visual pass.
@@ -132,8 +137,9 @@ tentative; each system's knobs live in its settings struct.
 **Tools** (`Tools/`) — every script is idempotent and has been run. All audio is synthesized placeholder. `BakeIKBonesFromFK.py`
 **must re-run after any IK retarget**; `AddSprintToLocomotion.py` is superseded, kept for history.
 
-**Level** (`Lvl_FirstPerson`) — landscape at 100/100/200 with dunes, berm and 13 craters and
-the trench (trace-verified 16/16), one Landscape parent (`Landscape2`) owning 64 proxies; 22 hedgehogs, 151 wire posts,
+**Level** (`Lvl_FirstPerson`) — landscape at 100/100/200 with dunes, berm, 13 craters and the
+superseded straight trench (the 057 zigzag is in the PNG only), one Landscape parent (`Landscape2`)
+owning 64 proxies; 22 hedgehogs, 151 wire posts,
 20 debris blocks; 3 greybox bunkers and 3 landing craft; 3 MG guns + manager; 7 infantry shells +
 manager + 12 parapet pieces; fog at ~35 m.
 

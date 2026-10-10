@@ -134,6 +134,7 @@ void FPlaytestRecorder::SamplePlayer(const ABreakingWaveCharacter* Player, bool 
 		SampleTimer = 0.f;
 		const TCHAR* Stance =
 			Player->IsProne() ? TEXT("prone") :
+			Player->IsClimbing() ? TEXT("climb") :
 			Player->IsSliding() ? TEXT("slide") :
 			Player->GetCharacterMovement()->IsFalling() ? TEXT("air") : TEXT("foot");
 		AppendEvent(TEXT("sample"), Pos, -1, FString::Printf(

@@ -14,6 +14,7 @@ No UI. The body tells you everything.
 - **Running** — Default movement. Standing still means full exposure.
 - **Prone** — Drop to the ground instantly. Drastically reduces hit profile. No movement while prone (Decision 025): prone is a held position, not a stance to travel in — stand up to move.
 - **Slide into prone** — Going prone while running carries momentum into a sliding prone. Fast emergency dodge.
+- **Climb over** — Keep walking into a wall up to ~2.5 m and you haul yourself up and over it: out of a trench, over a parapet, over the side of a craft. Slow and exposed — a deep trench takes ~1.7 s — and no firing on the way (Decision 058).
 - **Cover** — Press against cover near an object. Blocks hits from that direction.
 
 ### Firing

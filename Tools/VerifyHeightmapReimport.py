@@ -7,8 +7,8 @@
 # the table keeps one home: re-derive it when the centerline or the Profile changes and this
 # script follows.
 #
-# Traces ignore every non-landscape actor - the bunker-door anchors sit under the greybox
-# bunkers, and a plain trace reports the roof.
+# Traces ignore every non-landscape actor, so greybox standing over an anchor (a bunker roof, a
+# parapet) never reports in place of the ground.
 #
 # Run from inside the UE editor (with Lvl_FirstPerson open):
 #   Tools menu > Execute Python Script... > pick this file

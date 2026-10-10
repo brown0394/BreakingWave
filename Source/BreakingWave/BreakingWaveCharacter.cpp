@@ -14,6 +14,7 @@
 #include "UObject/ConstructorHelpers.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PlayerController.h"
+#include "GameFramework/RootMotionSource.h"
 #include "GameFramework/SpringArmComponent.h"
 #include "Camera/PlayerCameraManager.h"
 #include "HeadbobCameraShake.h"
@@ -241,11 +242,15 @@ void ABreakingWaveCharacter::DoAim(float Yaw, float Pitch)
 void ABreakingWaveCharacter::DoMove(float Right, float Forward)
 {
 	if (GetController() && !IsProne() && !IsProneTransitionActive() && !bAiming
-		&& !bTransitionInputLocked && !bDead)
+		&& !bTransitionInputLocked && !bDead && !IsClimbing())
 	{
 		// pass the move inputs
 		AddMovementInput(GetActorRightVector(), Right);
 		AddMovementInput(GetActorForwardVector(), Forward);
+		if (Forward > 0.f)
+		{
+			LastForwardInputFrame = GFrameCounter;
+		}
 	}
 }
 
@@ -256,7 +261,7 @@ bool ABreakingWaveCharacter::IsProneTransitionActive() const
 
 void ABreakingWaveCharacter::DoProneToggle()
 {
-	if (bTransitionInputLocked || bDead)
+	if (bTransitionInputLocked || bDead || IsClimbing())
 	{
 		return;
 	}
@@ -329,6 +334,8 @@ void ABreakingWaveCharacter::Tick(float DeltaSeconds)
 	{
 		AddMovementInput(GetActorForwardVector(), 1.f);
 	}
+
+	TickClimb(DeltaSeconds);
 
 	const float TargetFov = bAiming ? AimFieldOfView : DefaultFieldOfView;
 	if (!FMath::IsNearlyEqual(FirstPersonCameraComponent->FieldOfView, TargetFov, 0.01f))
@@ -478,6 +485,90 @@ void ABreakingWaveCharacter::SettleSlide()
 	bSlideActive = false;
 }
 
+void ABreakingWaveCharacter::TickClimb(float DeltaSeconds)
+{
+	if (IsClimbing())
+	{
+		if (GetWorld()->GetTimeSeconds() < ClimbPhaseEndTime)
+		{
+			return;
+		}
+		if (ClimbPhase == EClimbPhase::Rising)
+		{
+			ClimbPhase = EClimbPhase::GoingOver;
+			BeginClimbMove(ActiveClimb.OverTarget, ClimbSettings.OverSeconds);
+		}
+		else
+		{
+			FinishClimb();
+		}
+		return;
+	}
+
+	const bool bPushingForwardNow = LastForwardInputFrame + 1 >= GFrameCounter;
+	FClimbLedge Ledge;
+	const bool bPushingIntoClimbableWall = bPushingForwardNow && CanStartClimb()
+		&& FindClimbLedge(*this, GetActorForwardVector(), ClimbSettings, Ledge);
+
+	ClimbHoldElapsed = bPushingIntoClimbableWall ? ClimbHoldElapsed + DeltaSeconds : 0.f;
+	if (bPushingIntoClimbableWall && ClimbHoldElapsed >= ClimbSettings.HoldSeconds)
+	{
+		StartClimb(Ledge);
+	}
+}
+
+bool ABreakingWaveCharacter::CanStartClimb() const
+{
+	return !bDead && !bTransitionInputLocked && !bAiming && !IsProne() && !IsProneTransitionActive()
+		&& GetCharacterMovement()->IsMovingOnGround();
+}
+
+void ABreakingWaveCharacter::StartClimb(const FClimbLedge& Ledge)
+{
+	ActiveClimb = Ledge;
+	ClimbHoldElapsed = 0.f;
+	bAiming = false;
+	ClimbPhase = EClimbPhase::Rising;
+	GetCharacterMovement()->SetMovementMode(MOVE_Flying);
+
+	const float LedgeHeightMetres = Ledge.LedgeHeight / 100.f;
+	BeginClimbMove(Ledge.RiseTarget, ClimbSettings.RiseBaseSeconds + ClimbSettings.RiseSecondsPerMetre * LedgeHeightMetres);
+}
+
+void ABreakingWaveCharacter::BeginClimbMove(const FVector& Target, float Duration)
+{
+	UCharacterMovementComponent* Movement = GetCharacterMovement();
+	Movement->RemoveRootMotionSourceByID(ClimbRootMotionSourceId);
+
+	TSharedPtr<FRootMotionSource_MoveToForce> Move = MakeShared<FRootMotionSource_MoveToForce>();
+	Move->InstanceName = FName("ClimbOver");
+	Move->AccumulateMode = ERootMotionAccumulateMode::Override;
+	Move->StartLocation = GetActorLocation();
+	Move->TargetLocation = Target;
+	Move->Duration = FMath::Max(Duration, KINDA_SMALL_NUMBER);
+	Move->bRestrictSpeedToExpected = true;
+	Move->FinishVelocityParams.Mode = ERootMotionFinishVelocityMode::SetVelocity;
+	Move->FinishVelocityParams.SetVelocity = FVector::ZeroVector;
+	ClimbRootMotionSourceId = Movement->ApplyRootMotionSource(Move);
+
+	ClimbPhaseEndTime = GetWorld()->GetTimeSeconds() + Move->Duration;
+}
+
+void ABreakingWaveCharacter::FinishClimb()
+{
+	StopClimbMove();
+	GetCharacterMovement()->SetMovementMode(MOVE_Falling);
+}
+
+void ABreakingWaveCharacter::StopClimbMove()
+{
+	UCharacterMovementComponent* Movement = GetCharacterMovement();
+	Movement->RemoveRootMotionSourceByID(ClimbRootMotionSourceId);
+	Movement->Velocity = FVector::ZeroVector;
+	ClimbRootMotionSourceId = 0;
+	ClimbPhase = EClimbPhase::None;
+}
+
 void ABreakingWaveCharacter::DebugThirdPerson()
 {
 	bDebugThirdPersonViewActive = !bDebugThirdPersonViewActive;
@@ -533,7 +624,7 @@ void ABreakingWaveCharacter::DoSprintEnd()
 void ABreakingWaveCharacter::DoFire()
 {
 	const float Now = GetWorld()->GetTimeSeconds();
-	if (bReloading || IsProneTransitionActive() || bTransitionInputLocked || bDead
+	if (bReloading || IsProneTransitionActive() || bTransitionInputLocked || bDead || IsClimbing()
 		|| Now - LastShotTime < RifleProfile.FireIntervalSeconds)
 	{
 		return;
@@ -573,6 +664,10 @@ void ABreakingWaveCharacter::DoFire()
 
 void ABreakingWaveCharacter::DoAimStart()
 {
+	if (IsClimbing())
+	{
+		return;
+	}
 	bAiming = true;
 }
 
@@ -583,7 +678,7 @@ void ABreakingWaveCharacter::DoAimEnd()
 
 void ABreakingWaveCharacter::DoReload()
 {
-	if (bReloading || bTransitionInputLocked || bDead || MagRounds >= RifleProfile.MagazineSize)
+	if (bReloading || bTransitionInputLocked || bDead || IsClimbing() || MagRounds >= RifleProfile.MagazineSize)
 	{
 		return;
 	}
@@ -690,6 +785,10 @@ void ABreakingWaveCharacter::BecomeCorpse()
 
 	const FVector MomentumAtDeath = GetVelocity();
 
+	if (IsClimbing())
+	{
+		StopClimbMove();
+	}
 	SetActorTickEnabled(false);
 	GetWorldTimerManager().ClearAllTimersForObject(this);
 	GetCharacterMovement()->StopMovementImmediately();

@@ -32,7 +32,8 @@ editor-Python scripts in `Tools/`.
   Config/ + Content/FirstPerson/Blueprints/     BP leaves — asset refs, input assets, no logic
   ────────────────────────────────────────────
   ABreakingWavePlayerController                 death -> takeover phase machine (owns the loop)
-  ABreakingWaveCharacter                        input, movement, prone, rifle, hit resolution
+  ABreakingWaveCharacter                        input, movement, prone, climb state, rifle, hit resolution
+  FindClimbLedge (ClimbOver.cpp)                pure query: can this man climb the wall in front of him
   ABreakingWaveCameraManager                    pitch clamps
   UHeadbobShakePattern / UHitCameraShake        all camera motion, via the engine shake system
   ────────────────────────────────────────────
@@ -79,6 +80,7 @@ holds it. Where the engine already has the machinery, the project rides it:
 | Feature | Rides on | Decision |
 |---|---|---|
 | Prone | `ACharacter` crouch (capsule shrink, clearance check) | 023 |
+| Climb over | `FRootMotionSource_MoveToForce` in flying mode (capsule sweeps, real velocity) | 058 |
 | Headbob, hit shake, death rattle | `UCameraShakePattern` via `PlayerCameraManager` | 026 |
 | Death fade + audio duck | `StartCameraFade(..., bFadeAudio)` | 040 |
 | Debug keys | `DebugExecBindings` in `Config/DefaultInput.ini` | 024 |
@@ -112,13 +114,15 @@ The mechanism is a single `EditAnywhere` `USTRUCT` per system, exposed with
 `meta = (ShowOnlyInnerProperties)`:
 
 `FMGSettings` (~70 knobs), `FAllySimSettings`, `FInfantrySettings`, `FTransitionSettings`,
-`FHeadbobSettings`, `FHitShakeSettings`, `FCorpseSettings`, `FRifleProfile`.
+`FHeadbobSettings`, `FHitShakeSettings`, `FCorpseSettings`, `FClimbSettings`, `FRifleProfile`.
 
 The payoff is not tidiness. Because they are `USTRUCT`s, `FPlaytestRecorder::AppendSettingsDump`
 walks them **by reflection** and writes the full settings snapshot into the header of every
 session CSV. Tuning changes are therefore attributable per session without anyone remembering
 to record them — which is what makes the numbers in `03_DECISIONS.md` measurements rather
-than opinions (Decisions 033 and 041 were both driven by that data).
+than opinions (Decisions 033 and 041 were both driven by that data). Today only the three
+manager structs (`MG`, `Ally`, `Infantry`) are dumped; the player-side ones — headbob, hit shake,
+corpse, climb, transition, rifle — are not yet.
 
 ## 7. One bullet pipeline, every shooter
 

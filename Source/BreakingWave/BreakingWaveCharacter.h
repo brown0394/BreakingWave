@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "ClimbOver.h"
 #include "Engine/TimerHandle.h"
 #include "GameFramework/Character.h"
 #include "HeadbobCameraShake.h"
@@ -221,6 +222,9 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Movement")
 	float ProneDiveFallGravityScale = 2.f;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Movement")
+	FClimbSettings ClimbSettings;
+
 	/** The attacker's semi-auto rifle: shot per trigger pull, ~8-round mag (06_COMBAT.md firing) */
 	UPROPERTY(EditAnywhere, Category="Rifle")
 	FRifleProfile RifleProfile;
@@ -344,6 +348,18 @@ private:
 
 	void SettleSlide();
 
+	void TickClimb(float DeltaSeconds);
+
+	bool CanStartClimb() const;
+
+	void StartClimb(const FClimbLedge& Ledge);
+
+	void BeginClimbMove(const FVector& Target, float Duration);
+
+	void FinishClimb();
+
+	void StopClimbMove();
+
 	FVector StandingFirstPersonMeshRelativeLocation = FVector::ZeroVector;
 
 	TSubclassOf<UAnimInstance> StandingBodyAnimClass;
@@ -394,6 +410,18 @@ private:
 
 	float PreSlideBrakingDecelerationFalling = 0.f;
 
+	EClimbPhase ClimbPhase = EClimbPhase::None;
+
+	FClimbLedge ActiveClimb;
+
+	float ClimbPhaseEndTime = 0.f;
+
+	uint16 ClimbRootMotionSourceId = 0;
+
+	float ClimbHoldElapsed = 0.f;
+
+	uint64 LastForwardInputFrame = 0;
+
 	int32 WoundsTaken = 0;
 
 	bool bDead = false;
@@ -435,6 +463,9 @@ public:
 
 	/** True while prone momentum is still carrying the character along the ground */
 	bool IsSliding() const { return bSlideActive; }
+
+	/** True from the moment the haul up a wall starts until the body drops onto the far side; no firing, aiming or reloading */
+	bool IsClimbing() const { return ClimbPhase != EClimbPhase::None; }
 
 	/** True while aiming down sights; movement is locked and the view narrows */
 	bool IsAiming() const { return bAiming; }

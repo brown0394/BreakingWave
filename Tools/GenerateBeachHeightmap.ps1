@@ -18,9 +18,10 @@
 #   - bluff line wavers laterally +/-15 m from Zone 3 inland (BluffWaviness)
 #   - shell craters with raised rims, mostly Zone 1 (Craters table): 3 deep ones are the only
 #     cover in the kill zone (scarce by design), ~10 shallow ones are bombardment dressing
-#   - the trench channel in Zone 4 (fire trench, 3 communication trenches, 3 saps), carved from
-#     TrenchCenterline.json rather than from a table in this file - the same centerline drives
-#     the trench placement script, so geometry and navigation cannot disagree (Decision 052)
+#   - the zigzag trench channel in Zone 4 (fire trench, 3 communication trenches, 3 saps), carved
+#     from TrenchCenterline.json rather than from a table in this file - the same centerline drives
+#     the trench placement script, so geometry and navigation cannot disagree (Decisions 052, 057).
+#     This script regenerates that file from GenerateTrenchCenterline.ps1 before carving
 # All numbers tentative per CLAUDE.md - edit the tables/constants below and re-run.
 
 param(
@@ -28,13 +29,16 @@ param(
     [string]$CenterlinePath = (Join-Path $PSScriptRoot "TrenchCenterline.json")
 )
 
+& (Join-Path $PSScriptRoot "GenerateTrenchCenterline.ps1") -OutputPath $CenterlinePath
 $centerline = Get-Content -Raw -LiteralPath $CenterlinePath | ConvertFrom-Json
 
+$invariant = [cultureinfo]::InvariantCulture
 $segmentRows = foreach ($segment in $centerline.segments) {
     for ($i = 0; $i -lt $segment.points.Count - 1; $i++) {
         $a = $segment.points[$i]
         $b = $segment.points[$i + 1]
-        '        {{ {0}, {1}, {2}, {3} }},' -f $a[0], $a[1], $b[0], $b[1]
+        [string]::Format($invariant, '        {{ {0}, {1}, {2}, {3}, {4}, {5} }},',
+            $a.x, $a.y, $b.x, $b.y, $a.depth_fraction, $b.depth_fraction)
     }
 }
 $trenchSegmentLiteral = ($segmentRows -join "`n").TrimEnd(',')
@@ -97,7 +101,8 @@ public static class BeachHeightmap
     const double BermMaxHeight = 2.8;
     const double BermThickness = 5.0;
 
-    // Emitted from TrenchCenterline.json by the wrapper above: { ax, ay, bx, by } per polyline edge.
+    // Emitted from TrenchCenterline.json by the wrapper above, one row per polyline edge:
+    // { ax, ay, bx, by, depth fraction at a, depth fraction at b }.
     static readonly double[,] TrenchSegments = {
 __TRENCH_SEGMENTS__
     };
@@ -105,6 +110,7 @@ __TRENCH_SEGMENTS__
     const double TrenchHalfWidth = __TRENCH_HALF_WIDTH__;
     const double TrenchDepth = __TRENCH_DEPTH__;
     const double TrenchShoulder = __TRENCH_SHOULDER__;
+    const int TrenchFloorSmoothingRadius = 2;
 
     const double BluffWavinessAmplitude = 15.0;
     const double BluffWarpStartRow = 450;
@@ -226,16 +232,17 @@ __TRENCH_SEGMENTS__
     }
 
     // Returns how much of the trench floor this pixel is (1 on the floor, easing to 0 at the
-    // channel edge) and the height that floor sits at. The floor height is sampled at the
-    // nearest CENTRELINE point, not under the pixel, which is what keeps the floor level across
-    // the channel: the defense line falls 0.28 m per metre, so a constant sink would cant the
-    // 6 m floor by 1.7 m and leave "the height of a man in the trench" undefined. Noise is left
-    // out of the floor for the same reason - Zone 4's amplitude is ~1.6 m, which would out-bump
-    // a 1.2 m trench - while berm, dunes and craters stay in so the trench still follows the
-    // ground it crosses.
+    // channel edge) and the height that floor sits at. The floor is one height across the
+    // channel, taken from the nearest CENTRELINE point, so "the height of a man in the trench" is
+    // defined and firing steps sit on the level. That height is the LOWER of the two lips at that
+    // point minus the depth: on the defense line's 0.28 m-per-metre slope a sink measured from the
+    // centre left the seaward wall at ~0.1 m and the trench read as a shelf (Decision 057). The
+    // lips are sampled with noise, so the depth holds against the ground a man actually stands on.
+    // The depth fraction scales how much of the floor replaces the ground rather than how deep the
+    // floor is, so an open end blends into untouched ground instead of flattening a cap into it.
     static double TrenchFloor(double x, double y, out double floorHeight)
     {
-        double nearest = double.MaxValue, floorX = 0, floorY = 0;
+        double nearest = double.MaxValue, floorX = 0, floorY = 0, normalX = 0, normalY = 0, depthFraction = 0;
         for (int i = 0; i < TrenchSegments.GetLength(0); i++)
         {
             double ax = TrenchSegments[i, 0], ay = TrenchSegments[i, 1];
@@ -244,30 +251,84 @@ __TRENCH_SEGMENTS__
             if (y < Math.Min(ay, by) - TrenchHalfWidth || y > Math.Max(ay, by) + TrenchHalfWidth) continue;
             double cx, cy;
             double d = ClosestPointOnSegment(x, y, ax, ay, bx, by, out cx, out cy);
-            if (d < nearest) { nearest = d; floorX = cx; floorY = cy; }
+            if (d >= nearest) continue;
+            double length = Math.Sqrt((bx - ax) * (bx - ax) + (by - ay) * (by - ay));
+            double t = length > 0 ? Math.Sqrt((cx - ax) * (cx - ax) + (cy - ay) * (cy - ay)) / length : 0;
+            nearest = d; floorX = cx; floorY = cy;
+            normalX = length > 0 ? -(by - ay) / length : 1;
+            normalY = length > 0 ? (bx - ax) / length : 0;
+            depthFraction = TrenchSegments[i, 4] + (TrenchSegments[i, 5] - TrenchSegments[i, 4]) * t;
         }
 
         floorHeight = 0;
         if (nearest >= TrenchHalfWidth) return 0;
-        floorHeight = Grade(floorX, floorY, false) - TrenchDepth;
+        double lowerLip = Math.Min(
+            Grade(floorX + normalX * TrenchHalfWidth, floorY + normalY * TrenchHalfWidth, true),
+            Grade(floorX - normalX * TrenchHalfWidth, floorY - normalY * TrenchHalfWidth, true));
+        floorHeight = lowerLip - TrenchDepth;
 
         double floorHalfWidth = TrenchHalfWidth - TrenchShoulder;
-        if (nearest <= floorHalfWidth) return 1;
-        double t = (nearest - floorHalfWidth) / TrenchShoulder;
-        return 1 - t * t * (3 - 2 * t);
+        if (nearest <= floorHalfWidth) return depthFraction;
+        double s = (nearest - floorHalfWidth) / TrenchShoulder;
+        return (1 - s * s * (3 - 2 * s)) * depthFraction;
+    }
+
+    // Each pixel takes its floor from its own nearest centreline point, so the floor steps where
+    // the nearest point jumps - at every zigzag corner and every junction. Averaging the floor over
+    // neighbouring trench pixels turns those steps into short ramps.
+    static double[] SmoothTrenchFloor(double[] floor, double[] weight)
+    {
+        double[] smoothed = new double[floor.Length];
+        for (int row = 0; row < Size; row++)
+        {
+            for (int col = 0; col < Size; col++)
+            {
+                int index = row * Size + col;
+                if (weight[index] <= 0) continue;
+                double sum = 0, count = 0;
+                for (int dy = -TrenchFloorSmoothingRadius; dy <= TrenchFloorSmoothingRadius; dy++)
+                {
+                    for (int dx = -TrenchFloorSmoothingRadius; dx <= TrenchFloorSmoothingRadius; dx++)
+                    {
+                        int r = row + dy, c = col + dx;
+                        if (r < 0 || r >= Size || c < 0 || c >= Size) continue;
+                        int neighbour = r * Size + c;
+                        if (weight[neighbour] <= 0) continue;
+                        sum += floor[neighbour];
+                        count++;
+                    }
+                }
+                smoothed[index] = sum / count;
+            }
+        }
+        return smoothed;
     }
 
     public static void Generate(string path)
     {
+        double[] ground = new double[Size * Size];
+        double[] trenchWeight = new double[Size * Size];
+        double[] trenchFloor = new double[Size * Size];
+        for (int row = 0; row < Size; row++)
+        {
+            for (int col = 0; col < Size; col++)
+            {
+                int index = row * Size + col;
+                ground[index] = Grade(col, row, true);
+                trenchWeight[index] = TrenchFloor(col, row, out trenchFloor[index]);
+            }
+        }
+        trenchFloor = SmoothTrenchFloor(trenchFloor, trenchWeight);
+
         ushort[] pixels = new ushort[Size * Size];
         for (int row = 0; row < Size; row++)
         {
             for (int col = 0; col < Size; col++)
             {
-                double meters = Grade(col, row, true);
-                double floorHeight;
-                double trench = TrenchFloor(col, row, out floorHeight);
-                if (trench > 0) meters = meters * (1 - trench) + floorHeight * trench;
+                int index = row * Size + col;
+                double meters = ground[index];
+                double trench = trenchWeight[index];
+                if (trench > 0) meters = Math.Min(meters, meters * (1 - trench) + trenchFloor[index] * trench);
                 double value = 32768.0 + meters * 64.0;
                 if (value < 0) value = 0;
                 if (value > 65535) value = 65535;
